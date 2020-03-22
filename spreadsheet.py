@@ -1,18 +1,19 @@
 import gspread
+from datetime import datetime, timedelta
 import re, requests
 import geopy
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
 from oauth2client.service_account import ServiceAccountCredentials
-from trello import TrelloClient
+from trello import TrelloApi
 
 requests = {
     'Shopping': 'Picking up shopping and medications',
     'Prescription': 'Picking up shopping and medications',
-    'Energy top-up': 'Topping up electric or gas keys',
+    'Energy Top-up': 'Topping up electric or gas keys',
     'Post': 'Posting letters',
-    'Phone call': 'A friendly telephone call',
-    'Dog walk': 'Dog walking'
+    'Phone Call': 'A friendly telephone call',
+    'Dog Walk': 'Dog walking'
 }
 
 
@@ -41,15 +42,26 @@ if __name__ == "__main__":
     creds = ServiceAccountCredentials.from_json_keyfile_name('client_secret.json', scope)
     client = gspread.authorize(creds)
 
-    trello_client = TrelloClient(
-        api_key='96ea110307fae0a88aad529ed8f29423',
-        api_secret='a39b184a567529d192651db11a9e993b01724434bc793aaa1b7ab7cba66bf5a1',
-        token='b9c9b53acc2f7de0972a217366742f905ee7bb7670662e1aa6897df4fd8cfc23'
+    trello = TrelloApi('96ea110307fae0a88aad529ed8f29423',
+        #api_secret='a39b184a567529d192651db11a9e993b01724434bc793aaa1b7ab7cba66bf5a1',
+        'b9c9b53acc2f7de0972a217366742f905ee7bb7670662e1aa6897df4fd8cfc23')
         #token_secret='your-oauth-token-secret'
-    )
+    #)
 
-    boards = trello_client.list_boards()
-    print(boards)
+    print(trello)
+    lists = trello.boards.get_list('KKkfsmg9')
+
+    # Find list id
+    list_id = None
+    for list in lists:
+        if list['name'] == 'Requestee Needing Volunteer':
+            list_id = list['id']
+            break
+    if list_id is None:
+        raise RuntimeError('Column not found')
+
+    print(list)
+    #list = board.get_list('To Do')
 
     geolocator = Nominatim(user_agent="FindNearestAddr", timeout=1000)
     pc_pattern = re.compile('([wW][dD]3) *([0-9][a-zA-Z]+)')
@@ -85,6 +97,7 @@ if __name__ == "__main__":
     #print(vol_locs)
 
     request_pcs = requests_sheet.col_values(4)
+    request_names = requests_sheet.col_values(1)
     request_tasks = requests_sheet.col_values(6)
     request_status = requests_sheet.col_values(13)
 
@@ -100,4 +113,9 @@ if __name__ == "__main__":
 
         for j, vol in enumerate(vols):
             requests_sheet.update_cell(idx+2, j+7, vol_names[vol+1])
+
+        # Add trello card for this request
+        due_date = datetime.now() + timedelta(7)
+        trello.lists.new_card(list_id, request_names[idx+1], due_date.isoformat())
+
         requests_sheet.update_cell(idx+2, 13, 'TRUE')
