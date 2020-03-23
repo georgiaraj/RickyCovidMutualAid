@@ -7,6 +7,8 @@ from geopy.distance import geodesic
 from oauth2client.service_account import ServiceAccountCredentials
 from trello import TrelloApi
 
+from postcodes import *
+
 requests = {
     'Shopping': 'Picking up shopping and medications',
     'Prescription': 'Picking up shopping and medications',
@@ -48,7 +50,6 @@ if __name__ == "__main__":
         #token_secret='your-oauth-token-secret'
     #)
 
-    print(trello)
     lists = trello.boards.get_list('KKkfsmg9')
 
     # Find list id
@@ -59,9 +60,6 @@ if __name__ == "__main__":
             break
     if list_id is None:
         raise RuntimeError('Column not found')
-
-    print(list)
-    #list = board.get_list('To Do')
 
     geolocator = Nominatim(user_agent="FindNearestAddr", timeout=1000)
     pc_pattern = re.compile('([wW][dD]3) *([0-9][a-zA-Z]+)')
@@ -93,8 +91,11 @@ if __name__ == "__main__":
             vol_locs.append(('',''))
             print(f'Warning: postcode missing for {vol}')
 
-    #print(postcodes)
-    #print(vol_locs)
+    positions, bads = postcodes_data(postcodes)
+    if len(bads) > 0:
+        print(f'Warning: bad postcodes entered, {bads}, not printed on volunteer distribution')
+    plot_locations(positions.longitude, positions.latitude, jitter=30,
+                   save_file='volunteer-distribution.pdf', zoom=15)
 
     request_pcs = requests_sheet.col_values(4)
     request_names = requests_sheet.col_values(1)

@@ -1,4 +1,4 @@
 #!/bin/bash
 sudo apt install libproj-dev proj-data proj-bin libgeos-dev cython
-pip install --no-use-pep517 cartopy
-pip install contextily==1.0rc2
+pip3 install cartopy
+pip3 install contextily==1.0rc2
