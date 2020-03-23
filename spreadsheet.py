@@ -19,13 +19,14 @@ requests = {
 }
 
 
-def get_nearest_volunteers(vol_locs, vol_requests, location, request_type):
+def get_nearest_volunteers(vol_names, vol_locs, vol_requests, location, request_type):
 
     distances = [5000, 5000, 5000, 5000, 5000]
     closest_vols = [0, 0, 0, 0, 0]
     for idx, loc in enumerate(vol_locs):
+        print(f'Check vol {vol_names[idx]} with loc {loc} and requests {vol_requests[idx]}')
         if requests[request_type] not in vol_requests[idx]:
-            #print(f'Skipping volunteer {idx} as {vol_requests[idx]}')
+            print(f'Skipping volunteer {vol_names[idx]} as {vol_requests[idx]}')
             continue
         dist = geodesic(loc, location)
         for j, d in enumerate(distances):
@@ -34,7 +35,7 @@ def get_nearest_volunteers(vol_locs, vol_requests, location, request_type):
                 distances = distances[:j] + [dist] + distances[j+1:5]
                 break
 
-    print(f'Closest volunteers are {closest_vols} who are {distances} away')
+    print(f'Closest volunteers are {[vol_names[x] for x in closest_vols]} who are {distances} away')
     return closest_vols
 
 
@@ -85,17 +86,24 @@ if __name__ == "__main__":
         if result is not None:
             pc = f'{result.group(1).upper()} {result.group(2).upper()}'
             postcodes.append(pc)
-            location = geolocator.geocode(pc)
-            vol_locs.append((location.latitude, location.longitude))
-        else:
-            vol_locs.append(('',''))
-            print(f'Warning: postcode missing for {vol}')
+            # try:
+        #         location = geolocator.geocode(pc)
+        #         vol_locs.append((location.latitude, location.longitude))
+        #     except:
+        #         vol_locs.append(('',''))
+        #         print(f'Warning: location for {pc} timed out')
+        # else:
+        #     vol_locs.append(('',''))
+        #     print(f'Warning: postcode missing for {vol}')
 
     positions, bads = postcodes_data(postcodes)
     if len(bads) > 0:
         print(f'Warning: bad postcodes entered, {bads}, not printed on volunteer distribution')
     plot_locations(positions.longitude, positions.latitude, jitter=30,
                    save_file='volunteer-distribution.pdf', zoom=15)
+
+    vol_locs = zip(positions.latitude, positions.longitude)
+    print(vol_locs)
 
     request_pcs = requests_sheet.col_values(4)
     request_names = requests_sheet.col_values(1)
@@ -110,10 +118,10 @@ if __name__ == "__main__":
         location = geolocator.geocode(request)
         print(f'Find closest volunteer for {(location.latitude, location.longitude)} with request type {request_tasks[idx+1]}')
 
-        vols = get_nearest_volunteers(vol_locs, vol_requests, (location.latitude, location.longitude), request_tasks[idx+1])
+        vols = get_nearest_volunteers(vol_names[1:], vol_locs, vol_requests[1:], (location.latitude, location.longitude), request_tasks[idx+1])
 
         for j, vol in enumerate(vols):
-            requests_sheet.update_cell(idx+2, j+7, vol_names[vol+1])
+            requests_sheet.update_cell(idx+2, j+7, vol_names[vol-1])
 
         # Add trello card for this request
         due_date = datetime.now() + timedelta(7)
