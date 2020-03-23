@@ -35,8 +35,7 @@ def long_lat_to_spherical_mercator(longs, lats):
     Convert sequences of longitudes and latitudes into spherical Mercator
     coordinates.
     """
-    data = [shapely.geometry.Point(long, lat)
-            for long, lat in zip(longs, lats)]
+    data = [shapely.geometry.Point(lng, lat) for lng, lat in zip(longs, lats)]
     gdf = gpd.GeoSeries(data, crs="EPSG:4326")
     gdf = gdf.to_crs(epsg=3857)
     return gdf.geometry.x.values, gdf.geometry.y.values
@@ -63,3 +62,22 @@ def plot_locations(longs, lats, jitter=None, zoom=14, url=ctx.sources.OSM_A,
     if save_file is not None:
         f.savefig(save_file, dpi=300, bbox_inches='tight')
     return f
+
+def distance_between(loc, others):
+    """
+    Assumes loc is a (longitude, latitude) tuple. Others is 
+    assumed to be a list of such tuples.
+    """
+    loc = gpd.GeoSeries([shapely.geometry.Point(*loc)], crs="EPSG:4326").to_crs(epsg=7405)
+    data = [shapely.geometry.Point(lng, lat) for lng, lat in others]
+    others = gpd.GeoSeries(data, crs="EPSG:4326").to_crs(epsg=7405)
+    return others.distance(loc.iloc[0]).values
+
+def distance_between_sr(loc, others):
+    def metric(x1, x2):
+        r = 6371*1000
+        cos_lat_0_2 = np.cos(np.radians(51.63))**2
+        x1, x2 = np.radians(x1), np.radians(x2)
+        return r * np.sqrt((x2[1]-x1[1])**2 +
+                           cos_lat_0_2 * (x2[0] - x1[0])**2)
+    return [metric(loc, other) for other in others]
