@@ -2,6 +2,7 @@ import gspread
 from datetime import datetime, timedelta
 import re, requests
 import geopy
+import numpy as np
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
 from oauth2client.service_account import ServiceAccountCredentials
@@ -21,26 +22,18 @@ requests = {
 
 def get_nearest_volunteers(vol_names, vol_locs, vol_requests, location, request_type):
 
-    print(f'request location {location}')
+    distances = distance_between(location, vol_locs)
+    closest_vols = np.argsort(distances)
 
-    distances = [5000, 5000, 5000, 5000, 5000]
-    closest_vols = [0, 0, 0, 0, 0]
-    for idx, loc in enumerate(vol_locs):
-        print(f'Check vol {vol_names[idx]} with loc {loc} and requests {vol_requests[idx]}')
-        if requests[request_type] not in vol_requests[idx]:
-            print(f'Skipping volunteer {vol_names[idx]} as {vol_requests[idx]}')
-            continue
-        dist = geodesic(loc, location)
-        for j, d in enumerate(distances):
-            print(dist, distances)
-            if dist < d:
-                print('Distance is less so update')
-                closest_vols = closest_vols[:j] + [idx] + closest_vols[j+1:5]
-                distances = distances[:j] + [dist] + distances[j+1:5]
-                break
+    potential_vols = []
+    for x in closest_vols:
+        if requests[request_type] in vol_requests[x]:
+            potential_vols.append(x)
+        if len(potential_vols) == 5:
+            break
 
-    print(f'Closest volunteers are {[vol_names[x] for x in closest_vols]} who are {distances} away')
-    return closest_vols
+    print(f'Closest volunteers are {[vol_names[x] for x in potential_vols]} who are at {[vol_locs[x] for x in potential_vols]} and are {[distances[x] for x in potential_vols]} away')
+    return potential_vols
 
 
 if __name__ == "__main__":
@@ -57,7 +50,7 @@ if __name__ == "__main__":
 
     lists = trello.boards.get_list('KKkfsmg9')
 
-    create_trello = True
+    create_trello = False
 
     # Find list id
     list_id = None
@@ -79,37 +72,29 @@ if __name__ == "__main__":
     requests_sheet = client.open_by_key("19JrA8_PK_N6SBTy1KO5cmRFCK1TNKtFqpB4eyKOrJuU").sheet1 # real sheet
 
     # Extract and print all of the volunteer postcodes
-    vol_names = vol_sheet.col_values(2)
-    vol_addresses = vol_sheet.col_values(5)
-    vol_requests = vol_sheet.col_values(6)
-    vol_locs = []
+    vol_names = vol_sheet.col_values(2)[1:]
+    vol_addresses = vol_sheet.col_values(5)[1:]
+    vol_requests = vol_sheet.col_values(6)[1:]
+
     postcodes = []
-    for vol in vol_addresses[1:]:
-    # postcodes = []
-    # json = { 'postcodes': [] }
-    # for addr in addresses[1:]:
+    pc_exists = []
+    for idx, vol in enumerate(vol_addresses):
         result = pc_pattern.search(vol)
         if result is not None:
             pc = f'{result.group(1).upper()} {result.group(2).upper()}'
             postcodes.append(pc)
-            # try:
-        #         location = geolocator.geocode(pc)
-        #         vol_locs.append((location.latitude, location.longitude))
-        #     except:
-        #         vol_locs.append(('',''))
-        #         print(f'Warning: location for {pc} timed out')
-        # else:
-        #     vol_locs.append(('',''))
-        #     print(f'Warning: postcode missing for {vol}')
+            pc_exists.append(idx)
 
     positions, bads = postcodes_data(postcodes)
-    if len(bads) > 0:
-        print(f'Warning: bad postcodes entered, {bads}, not printed on volunteer distribution')
-    plot_locations(positions.longitude, positions.latitude, jitter=30,
-                   save_file='volunteer-distribution.pdf', zoom=15)
+    if plot_locations:
+        if len(bads) > 0:
+            print(f'Warning: bad postcodes entered, {bads}, not printed on volunteer distribution')
+        plot_locations(positions.longitude, positions.latitude, jitter=30,
+                       save_file='volunteer-distribution.pdf', zoom=15)
 
-    vol_locs = zip(positions.latitude, positions.longitude)
-    print(vol_locs)
+    vol_locs = [(lng, lat) for lat, lng in zip(positions.latitude, positions.longitude)]
+    vol_names = [vol_names[x] for x in pc_exists]
+    vol_requests = [vol_requests[x] for x in pc_exists]
 
     request_pcs = requests_sheet.col_values(4)
     request_names = requests_sheet.col_values(1)
@@ -122,12 +107,16 @@ if __name__ == "__main__":
             continue
         # Get postcode and lat/long of request
         location = geolocator.geocode(request)
-        print(f'Find closest volunteer for {(location.latitude, location.longitude)} with request type {request_tasks[idx+1]}')
+        request_loc = (location.longitude, location.latitude)
 
-        vols = get_nearest_volunteers(vol_names[1:], vol_locs, vol_requests[1:], (location.latitude, location.longitude), request_tasks[idx+1])
+        print(f'Find closest volunteer for {request_names[idx+1]} at {request_loc} '
+              'with request type {request_tasks[idx+1]}')
+
+        vols = get_nearest_volunteers(vol_names, vol_locs, vol_requests,
+                                      request_loc, request_tasks[idx+1])
 
         for j, vol in enumerate(vols):
-            requests_sheet.update_cell(idx+2, j+7, vol_names[vol+1])
+            requests_sheet.update_cell(idx+2, j+7, vol_names[vol])
 
         if create_trello:
             # Add trello card for this request
