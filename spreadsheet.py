@@ -21,6 +21,8 @@ requests = {
 
 def get_nearest_volunteers(vol_names, vol_locs, vol_requests, location, request_type):
 
+    print(f'request location {location}')
+
     distances = [5000, 5000, 5000, 5000, 5000]
     closest_vols = [0, 0, 0, 0, 0]
     for idx, loc in enumerate(vol_locs):
@@ -30,7 +32,9 @@ def get_nearest_volunteers(vol_names, vol_locs, vol_requests, location, request_
             continue
         dist = geodesic(loc, location)
         for j, d in enumerate(distances):
+            print(dist, distances)
             if dist < d:
+                print('Distance is less so update')
                 closest_vols = closest_vols[:j] + [idx] + closest_vols[j+1:5]
                 distances = distances[:j] + [dist] + distances[j+1:5]
                 break
@@ -52,6 +56,8 @@ if __name__ == "__main__":
     #)
 
     lists = trello.boards.get_list('KKkfsmg9')
+
+    create_trello = True
 
     # Find list id
     list_id = None
@@ -121,10 +127,11 @@ if __name__ == "__main__":
         vols = get_nearest_volunteers(vol_names[1:], vol_locs, vol_requests[1:], (location.latitude, location.longitude), request_tasks[idx+1])
 
         for j, vol in enumerate(vols):
-            requests_sheet.update_cell(idx+2, j+7, vol_names[vol-1])
+            requests_sheet.update_cell(idx+2, j+7, vol_names[vol+1])
 
-        # Add trello card for this request
-        due_date = datetime.now() + timedelta(7)
-        trello.lists.new_card(list_id, request_names[idx+1], due_date.isoformat())
+        if create_trello:
+            # Add trello card for this request
+            due_date = datetime.now() + timedelta(7)
+            trello.lists.new_card(list_id, request_names[idx+1], due_date.isoformat())
 
         requests_sheet.update_cell(idx+2, 13, 'TRUE')
