@@ -50,7 +50,7 @@ if __name__ == "__main__":
 
     lists = trello.boards.get_list('KKkfsmg9')
 
-    create_trello = False
+    create_trello = True
 
     # Find list id
     list_id = None
