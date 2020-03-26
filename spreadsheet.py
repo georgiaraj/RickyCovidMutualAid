@@ -99,7 +99,7 @@ if __name__ == "__main__":
     request_pcs = requests_sheet.col_values(4)
     request_names = requests_sheet.col_values(1)
     request_tasks = requests_sheet.col_values(6)
-    request_status = requests_sheet.col_values(13)
+    request_status = requests_sheet.col_values(14)
 
     for idx, request in enumerate(request_pcs[1:]):
         if request_status[idx+1] == 'TRUE':
@@ -116,11 +116,11 @@ if __name__ == "__main__":
                                       request_loc, request_tasks[idx+1])
 
         for j, vol in enumerate(vols):
-            requests_sheet.update_cell(idx+2, j+7, vol_names[vol])
+            requests_sheet.update_cell(idx+2, j+8, vol_names[vol])
 
         if create_trello:
             # Add trello card for this request
             due_date = datetime.now() + timedelta(7)
             trello.lists.new_card(list_id, request_names[idx+1], due_date.isoformat())
 
-        requests_sheet.update_cell(idx+2, 13, 'TRUE')
+        requests_sheet.update_cell(idx+2, 14, 'TRUE')
