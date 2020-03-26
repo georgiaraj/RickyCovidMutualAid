@@ -2,6 +2,7 @@ import gspread
 from datetime import datetime, timedelta
 import re, requests
 import geopy
+import argparse
 import numpy as np
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
@@ -9,6 +10,12 @@ from oauth2client.service_account import ServiceAccountCredentials
 from trello import TrelloApi
 
 from postcodes import *
+
+r_headings = {
+    'Initials (Trello)': 'Initials',
+    'Postcode (please make sure you enter this, even if approx!)': 'Postcode',
+    'Pharmacy (if applicable)': 'Pharmacy'
+}
 
 requests = {
     'Shopping': 'Picking up shopping and medications',
@@ -20,7 +27,15 @@ requests = {
 }
 
 
-def get_nearest_volunteers(vol_names, vol_locs, vol_requests, location, request_type):
+def get_args():
+    parser = argparse.ArgumentParser('Google sheets trello script')
+    parser.add_argument('--create_trello', action='store_true',
+                        help='If set, trello cards will be generated for unprocessed rows')
+    parser.add_argument('--test_mode', action='store_true',
+                        help='If set, the test spreadsheet will be used')
+    return parser.parse_args()
+
+def get_nearest_volunteers(vol_locs, vol_requests, location, request_type):
 
     distances = distance_between(location, vol_locs)
     closest_vols = np.argsort(distances)
@@ -32,34 +47,30 @@ def get_nearest_volunteers(vol_names, vol_locs, vol_requests, location, request_
         if len(potential_vols) == 5:
             break
 
-    print(f'Closest volunteers are {[vol_names[x] for x in potential_vols]} who are at {[vol_locs[x] for x in potential_vols]} and are {[distances[x] for x in potential_vols]} away')
     return potential_vols
 
-
 if __name__ == "__main__":
+
+    args = get_args()
+
     # use creds to create a client to interact with the Google Drive API
     scope = ['https://www.googleapis.com/auth/spreadsheets']
     creds = ServiceAccountCredentials.from_json_keyfile_name('client_secret.json', scope)
     client = gspread.authorize(creds)
 
-    trello = TrelloApi('96ea110307fae0a88aad529ed8f29423',
-        #api_secret='a39b184a567529d192651db11a9e993b01724434bc793aaa1b7ab7cba66bf5a1',
-        'b9c9b53acc2f7de0972a217366742f905ee7bb7670662e1aa6897df4fd8cfc23')
-        #token_secret='your-oauth-token-secret'
-    #)
+    if args.create_trello:
+        trello = TrelloApi('96ea110307fae0a88aad529ed8f29423',
+                           'b9c9b53acc2f7de0972a217366742f905ee7bb7670662e1aa6897df4fd8cfc23')
+        lists = trello.boards.get_list('KKkfsmg9')
 
-    lists = trello.boards.get_list('KKkfsmg9')
-
-    create_trello = True
-
-    # Find list id
-    list_id = None
-    for list in lists:
-        if list['name'] == 'Requestee Needing Volunteer':
-            list_id = list['id']
-            break
-    if list_id is None:
-        raise RuntimeError('Column not found')
+        # Find list id
+        list_id = None
+        for list in lists:
+            if list['name'] == 'Request Needing Volunteer':
+                list_id = list['id']
+                break
+        if list_id is None:
+            raise RuntimeError('Column not found')
 
     geolocator = Nominatim(user_agent="FindNearestAddr", timeout=1000)
     pc_pattern = re.compile('([wW][dD]3) *([0-9][a-zA-Z]+)')
@@ -68,8 +79,13 @@ if __name__ == "__main__":
     # Find a workbook by name and open the first sheet
     # Make sure you use the right name here.
     vol_sheet = client.open_by_key("1QfBAkcEi1Sc0dm-coOcP5ewEw_c2qDzasF24pN7Yqcc").sheet1
-    #requests_sheet = client.open_by_key("1MTxkW3g-AZSn651E-brruYadG9sllr0EOwdC6CDdFy4").sheet1 # test sheet
-    requests_sheet = client.open_by_key("19JrA8_PK_N6SBTy1KO5cmRFCK1TNKtFqpB4eyKOrJuU").sheet1 # real sheet
+
+    if args.test_mode:
+        # test sheet
+        requests_sheet = client.open_by_key("1MTxkW3g-AZSn651E-brruYadG9sllr0EOwdC6CDdFy4").sheet1
+    else:
+        # real sheet
+        requests_sheet = client.open_by_key("19JrA8_PK_N6SBTy1KO5cmRFCK1TNKtFqpB4eyKOrJuU").sheet1
 
     # Extract and print all of the volunteer postcodes
     vol_names = vol_sheet.col_values(2)[1:]
@@ -96,31 +112,41 @@ if __name__ == "__main__":
     vol_names = [vol_names[x] for x in pc_exists]
     vol_requests = [vol_requests[x] for x in pc_exists]
 
-    request_pcs = requests_sheet.col_values(4)
-    request_names = requests_sheet.col_values(1)
-    request_tasks = requests_sheet.col_values(6)
-    request_status = requests_sheet.col_values(14)
+    request_info = requests_sheet.get_all_values()
 
-    for idx, request in enumerate(request_pcs[1:]):
-        if request_status[idx+1] == 'TRUE':
+    col_headings = dict(zip([r_headings[x] if x in r_headings.keys() else x for x
+                             in request_info[0]], [x+1 for x in range(len(request_info[0]))]))
+
+    request_df = pd.DataFrame(request_info[1:], columns=col_headings.keys())
+
+    for idx, request in request_df.iterrows():
+        if request['Initials'] == '':
+            print(f'No further requests found.')
+            break
+
+        if request['Trello Status'] == 'TRUE':
             print(f'Skipping request because request completed')
             continue
-        # Get postcode and lat/long of request
-        location = geolocator.geocode(request)
-        request_loc = (location.longitude, location.latitude)
 
-        print(f'Find closest volunteer for {request_names[idx+1]} at {request_loc} '
-              'with request type {request_tasks[idx+1]}')
+        try:
+            # Get postcode and lat/long of request
+            location = geolocator.geocode(request['Postcode'])
+            request_loc = (location.longitude, location.latitude)
+        except AttributeError:
+            print(f'Warning: Request missing postcode, skipping')
+            continue
 
-        vols = get_nearest_volunteers(vol_names, vol_locs, vol_requests,
-                                      request_loc, request_tasks[idx+1])
+        print(f"Find closest volunteer for {request['Name']} at {request_loc} "
+              f"with request type {request['Request']}")
+
+        vols = get_nearest_volunteers(vol_locs, vol_requests,
+                                      request_loc, request['Request'])
 
         for j, vol in enumerate(vols):
-            requests_sheet.update_cell(idx+2, j+8, vol_names[vol])
+            requests_sheet.update_cell(idx+2, col_headings['Potential Vol 1']+j, vol_names[vol])
 
-        if create_trello:
+        if args.create_trello:
             # Add trello card for this request
             due_date = datetime.now() + timedelta(7)
-            trello.lists.new_card(list_id, request_names[idx+1], due_date.isoformat())
-
-        requests_sheet.update_cell(idx+2, 14, 'TRUE')
+            trello.lists.new_card(list_id, request['Initials'], due_date.isoformat())
+            requests_sheet.update_cell(idx+2, col_headings['Trello Status'], 'TRUE')
