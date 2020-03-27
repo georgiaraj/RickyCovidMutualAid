@@ -19,6 +19,7 @@ r_headings = {
 
 v_headings = {
     'Full Postcode - needed to match you up to your neighbours': 'Postcode',
+    'How are you able to support your neighbours? Tick as many as apply.': 'Request',
     'What is the best way for us to contact you if one of your neighbours gets in touch needing help?': 'Contact Means'
 }
 
@@ -36,13 +37,14 @@ def get_args():
     parser = argparse.ArgumentParser('Google sheets trello script')
     parser.add_argument('--create_trello', action='store_true',
                         help='If set, trello cards will be generated for unprocessed rows')
+    parser.add_argument('--plot_vol_locations', action='store_true',
+                        help='If set, the volunteer locations will be printed')
     parser.add_argument('--test_mode', action='store_true',
                         help='If set, the test spreadsheet will be used')
     return parser.parse_args()
 
 
 def get_formatted_postcode(row):
-    print(row['Postcode'])
     result = pc_pattern.search(row['Postcode'])
     if result is not None:
         pc = f'{result.group(1).upper()} {result.group(2).upper()}'
@@ -50,22 +52,19 @@ def get_formatted_postcode(row):
         row['Postcode exists'] = True
     else:
         row['Postcode exists'] = False
-    print(row['Postcode'])
-    print(row['Postcode exists'])
+    return row
 
-def get_nearest_volunteers(vol_locs, vol_requests, location, request_type):
+def get_nearest_volunteers(vol_df, location, request_type):
 
-    distances = distance_between(location, vol_locs)
-    closest_vols = np.argsort(distances)
+    vol_df_pcs = vol_df[vol_df['Postcode exists'] &
+                        vol_df['Request'].str.contains(requests[request_type])].copy()
 
-    potential_vols = []
-    for x in closest_vols:
-        if requests[request_type] in vol_requests[x]:
-            potential_vols.append(x)
-        if len(potential_vols) == 5:
-            break
+    vol_df_pcs['Distance from'] = distance_between(location, vol_df_pcs['longitude'],
+                                                   vol_df_pcs['latitude'])
 
-    return potential_vols
+    vol_df_pcs = vol_df_pcs.sort_values('Distance from')
+
+    return vol_df_pcs.head(5)
 
 def get_df_from_spreadsheet(sheet, headings):
     data = sheet.get_all_values()
@@ -73,9 +72,12 @@ def get_df_from_spreadsheet(sheet, headings):
     col_headings = dict(zip([headings[x] if x in headings.keys() else x for x
                              in data[0]], [x+1 for x in range(len(data[0]))]))
 
+    print(data)
+    print(col_headings)
+
     df = pd.DataFrame(data[1:], columns=col_headings.keys())
 
-    return df, col_headings
+    return df.copy(), col_headings
 
 if __name__ == "__main__":
 
@@ -118,38 +120,51 @@ if __name__ == "__main__":
     # Extract and print all of the volunteer postcodes
     vol_df, v_col_headings = get_df_from_spreadsheet(vol_sheet, v_headings)
 
-    vol_df['Postcode exists'] = [False] * len(vol_df['Postcode'])
+    vol_df['Postcode exists'] = [False] * len(vol_df.index)
+    #vol_df['Longitude'] = [(0.0,0.0)] * len(vol_df.index)
 
     # Format postcodes for volunteers
-    vol_df.apply(get_formatted_postcode, axis=1)
+    vol_df = vol_df.apply(get_formatted_postcode, axis=1)
 
-    print(vol_df)
+    print('dataframe now', vol_df)
+
+    positions, bad = postcodes_data(vol_df[vol_df['Postcode exists']]['Postcode'])
+
+    print('pos', positions)
+
+    vol_df = vol_df.join(positions[['longitude', 'latitude']], on='Postcode', how='left')
+
+    #vol_df['Longitude'][vol_df['Postcode exists']] = positions.longitude
+    #vol_df['Latitude'][vol_df['Postcode exists']] = positions.latitude
+
+    print('after join', vol_df)
 
     vol_names = vol_sheet.col_values(2)[1:]
     vol_addresses = vol_sheet.col_values(5)[1:]
     vol_requests = vol_sheet.col_values(6)[1:]
 
-    postcodes = []
-    pc_exists = []
-    for idx, vol in enumerate(vol_addresses):
-        result = pc_pattern.search(vol)
-        if result is not None:
-            pc = f'{result.group(1).upper()} {result.group(2).upper()}'
-            postcodes.append(pc)
-            pc_exists.append(idx)
+    # postcodes = []
+    # pc_exists = []
+    # for idx, vol in enumerate(vol_addresses):
+    #     result = pc_pattern.search(vol)
+    #     if result is not None:
+    #         pc = f'{result.group(1).upper()} {result.group(2).upper()}'
+    #         postcodes.append(pc)
+    #         pc_exists.append(idx)
 
-    positions, bads = postcodes_data(postcodes)
-    if plot_locations:
+    if args.plot_vol_locations:
         if len(bads) > 0:
             print(f'Warning: bad postcodes entered, {bads}, not printed on volunteer distribution')
         plot_locations(positions.longitude, positions.latitude, jitter=30,
                        save_file='volunteer-distribution.pdf', zoom=15)
 
-    vol_locs = [(lng, lat) for lat, lng in zip(positions.latitude, positions.longitude)]
-    vol_names = [vol_names[x] for x in pc_exists]
-    vol_requests = [vol_requests[x] for x in pc_exists]
+    #vol_locs = [(lng, lat) for lat, lng in zip(positions.latitude, positions.longitude)]
+    #vol_names = [vol_names[x] for x in pc_exists]
+    #vol_requests = [vol_requests[x] for x in pc_exists]
 
     request_df, r_col_headings = get_df_from_spreadsheet(requests_sheet, r_headings)
+
+    print(r_col_headings)
 
     for idx, request in request_df.iterrows():
         if request['Initials'] == '':
@@ -171,11 +186,13 @@ if __name__ == "__main__":
         print(f"Find closest volunteer for {request['Name']} at {request_loc} "
               f"with request type {request['Request']}")
 
-        vols = get_nearest_volunteers(vol_locs, vol_requests,
-                                      request_loc, request['Request'])
+        vols = get_nearest_volunteers(vol_df, request_loc, request['Request'])
 
-        for j, vol in enumerate(vols):
-            requests_sheet.update_cell(idx+2, r_col_headings['Potential Vol 1']+j, vol_names[vol])
+        print(vols)
+
+        for j, vol in vols.iterrows():
+            requests_sheet.update_cell(idx+2, int(r_col_headings['Potential Vol 1'])+j,
+                                       vol['Name'])
 
         if args.create_trello:
             # Add trello card for this request

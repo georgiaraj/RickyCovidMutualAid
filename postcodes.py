@@ -13,10 +13,12 @@ sns.set(style='white')
 def postcodes_data(postcodes):
     """
     Retrieve data for a list of postcodes from postcodes.io
-    
+
     Returns a tuple (good_results, bad_postcodes).
     """
-    
+
+    postcodes = np.unique(postcodes)
+
     url = "https://api.postcodes.io/postcodes"
     postcodes = {"postcodes": postcodes}
     r = requests.post(url, data = postcodes)
@@ -63,13 +65,13 @@ def plot_locations(longs, lats, jitter=None, zoom=14, url=ctx.sources.OSM_A,
         f.savefig(save_file, dpi=300, bbox_inches='tight')
     return f
 
-def distance_between(loc, others):
+def distance_between(loc, others_lng, other_lat):
     """
-    Assumes loc is a (longitude, latitude) tuple. Others is 
+    Assumes loc is a (longitude, latitude) tuple. Others is
     assumed to be a list of such tuples.
     """
     loc = gpd.GeoSeries([shapely.geometry.Point(*loc)], crs="EPSG:4326").to_crs(epsg=7405)
-    data = [shapely.geometry.Point(lng, lat) for lng, lat in others]
+    data = [shapely.geometry.Point(lng, lat) for (lng, lat) in zip(others_lng, other_lat)]
     others = gpd.GeoSeries(data, crs="EPSG:4326").to_crs(epsg=7405)
     return others.distance(loc.iloc[0]).values
 
