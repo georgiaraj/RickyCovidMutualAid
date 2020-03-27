@@ -17,6 +17,11 @@ r_headings = {
     'Pharmacy (if applicable)': 'Pharmacy'
 }
 
+v_headings = {
+    'Full Postcode - needed to match you up to your neighbours': 'Postcode',
+    'What is the best way for us to contact you if one of your neighbours gets in touch needing help?': 'Contact Means'
+}
+
 requests = {
     'Shopping': 'Picking up shopping and medications',
     'Prescription': 'Picking up shopping and medications',
@@ -35,6 +40,19 @@ def get_args():
                         help='If set, the test spreadsheet will be used')
     return parser.parse_args()
 
+
+def get_formatted_postcode(row):
+    print(row['Postcode'])
+    result = pc_pattern.search(row['Postcode'])
+    if result is not None:
+        pc = f'{result.group(1).upper()} {result.group(2).upper()}'
+        row['Postcode'] = pc
+        row['Postcode exists'] = True
+    else:
+        row['Postcode exists'] = False
+    print(row['Postcode'])
+    print(row['Postcode exists'])
+
 def get_nearest_volunteers(vol_locs, vol_requests, location, request_type):
 
     distances = distance_between(location, vol_locs)
@@ -48,6 +66,16 @@ def get_nearest_volunteers(vol_locs, vol_requests, location, request_type):
             break
 
     return potential_vols
+
+def get_df_from_spreadsheet(sheet, headings):
+    data = sheet.get_all_values()
+
+    col_headings = dict(zip([headings[x] if x in headings.keys() else x for x
+                             in data[0]], [x+1 for x in range(len(data[0]))]))
+
+    df = pd.DataFrame(data[1:], columns=col_headings.keys())
+
+    return df, col_headings
 
 if __name__ == "__main__":
 
@@ -88,6 +116,15 @@ if __name__ == "__main__":
         requests_sheet = client.open_by_key("19JrA8_PK_N6SBTy1KO5cmRFCK1TNKtFqpB4eyKOrJuU").sheet1
 
     # Extract and print all of the volunteer postcodes
+    vol_df, v_col_headings = get_df_from_spreadsheet(vol_sheet, v_headings)
+
+    vol_df['Postcode exists'] = [False] * len(vol_df['Postcode'])
+
+    # Format postcodes for volunteers
+    vol_df.apply(get_formatted_postcode, axis=1)
+
+    print(vol_df)
+
     vol_names = vol_sheet.col_values(2)[1:]
     vol_addresses = vol_sheet.col_values(5)[1:]
     vol_requests = vol_sheet.col_values(6)[1:]
@@ -112,12 +149,7 @@ if __name__ == "__main__":
     vol_names = [vol_names[x] for x in pc_exists]
     vol_requests = [vol_requests[x] for x in pc_exists]
 
-    request_info = requests_sheet.get_all_values()
-
-    col_headings = dict(zip([r_headings[x] if x in r_headings.keys() else x for x
-                             in request_info[0]], [x+1 for x in range(len(request_info[0]))]))
-
-    request_df = pd.DataFrame(request_info[1:], columns=col_headings.keys())
+    request_df, r_col_headings = get_df_from_spreadsheet(requests_sheet, r_headings)
 
     for idx, request in request_df.iterrows():
         if request['Initials'] == '':
@@ -143,10 +175,10 @@ if __name__ == "__main__":
                                       request_loc, request['Request'])
 
         for j, vol in enumerate(vols):
-            requests_sheet.update_cell(idx+2, col_headings['Potential Vol 1']+j, vol_names[vol])
+            requests_sheet.update_cell(idx+2, r_col_headings['Potential Vol 1']+j, vol_names[vol])
 
         if args.create_trello:
             # Add trello card for this request
             due_date = datetime.now() + timedelta(7)
-            trello.lists.new_card(list_id, request['Initials'], due_date.isoformat())
-            requests_sheet.update_cell(idx+2, col_headings['Trello Status'], 'TRUE')
+            trello.lists.new_card(list_id, request['Initials'], due_date.isoformat(), desc='Test description')
+            requests_sheet.update_cell(idx+2, r_col_headings['Trello Status'], 'TRUE')
