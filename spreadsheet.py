@@ -72,9 +72,6 @@ def get_df_from_spreadsheet(sheet, headings):
     col_headings = dict(zip([headings[x] if x in headings.keys() else x for x
                              in data[0]], [x+1 for x in range(len(data[0]))]))
 
-    print(data)
-    print(col_headings)
-
     df = pd.DataFrame(data[1:], columns=col_headings.keys())
 
     return df.copy(), col_headings
@@ -190,9 +187,9 @@ if __name__ == "__main__":
 
         print(vols)
 
-        for j, vol in vols.iterrows():
-            requests_sheet.update_cell(idx+2, int(r_col_headings['Potential Vol 1'])+j,
-                                       vol['Name'])
+        for j, vol in enumerate(vols['Name'].values):
+            print(vol, j)
+            requests_sheet.update_cell(idx+2, r_col_headings['Potential Vol 1']+j, vol)
 
         if args.create_trello:
             # Add trello card for this request
