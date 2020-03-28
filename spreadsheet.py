@@ -161,7 +161,7 @@ if __name__ == "__main__":
         vols = get_nearest_volunteers(vol_df, request_loc, request['Request'])
 
         description = f"Find volunteer to help {request['Name']} with {request['Request']}\n"
-        description += f"Contact details: {request['Phone Number/email']}\n"
+        description += f"Contact details: {request['Phone Number/email']} \n"
         description += f"Original call taken by {request['Call Handler']}\n\n"
         description += f"Potential volunteers:\n\n"
 
@@ -177,14 +177,18 @@ if __name__ == "__main__":
             requests_sheet.update_cell(idx+2, r_col_headings['Potential Vol 1']+j, vol['Name'])
 
         description += f"Request required {request['Due Date']}\n\n"
-        description += f"NOTES: {request['Notes']}"
+        description += f"IMPORTANT INFO: {request['Important Info']}\n"
+        description += f"NOTES: {request['Notes']}\n"
 
         print(description)
 
         if args.create_trello:
             # Add trello card for this request
-            due_date = datetime.strptime(request['Due Date'], "%d/%m/%Y").date() - timedelta(1)
-            print(due_date)
-            trello.lists.new_card(list_id, request['Initials'], due_date.isoformat(),
-                                  desc=description)
+            if request['Due Date']:
+                due_date = datetime.strptime(request['Due Date'], "%d/%m/%Y").date() - timedelta(1)
+            else:
+                # Play safe by adding a date that's soon if not entered.
+                due_date = datetime.now() + timedelta(1)
+            trello.lists.new_card(list_id, f"{request['Initials']} - {request['Postcode']}",
+                                  due_date.isoformat(), desc=description)
             requests_sheet.update_cell(idx+2, r_col_headings['Trello Status'], 'TRUE')
