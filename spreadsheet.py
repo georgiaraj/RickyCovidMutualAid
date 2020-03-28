@@ -18,8 +18,8 @@ r_headings = {
 }
 
 v_headings = {
-    'Full Postcode - needed to match you up to your neighbours': 'Postcode',
-    'How are you able to support your neighbours? Tick as many as apply.': 'Request',
+    'Full Postcode': 'Postcode',
+    'How are you able to support your neighbours?': 'Request',
     'What is the best way for us to contact you if one of your neighbours gets in touch needing help?': 'Contact Means'
 }
 
@@ -123,31 +123,13 @@ if __name__ == "__main__":
     # Format postcodes for volunteers
     vol_df = vol_df.apply(get_formatted_postcode, axis=1)
 
-    print('dataframe now', vol_df)
-
     positions, bad = postcodes_data(vol_df[vol_df['Postcode exists']]['Postcode'])
 
-    print('pos', positions)
-
     vol_df = vol_df.join(positions[['longitude', 'latitude']], on='Postcode', how='left')
-
-    #vol_df['Longitude'][vol_df['Postcode exists']] = positions.longitude
-    #vol_df['Latitude'][vol_df['Postcode exists']] = positions.latitude
-
-    print('after join', vol_df)
 
     vol_names = vol_sheet.col_values(2)[1:]
     vol_addresses = vol_sheet.col_values(5)[1:]
     vol_requests = vol_sheet.col_values(6)[1:]
-
-    # postcodes = []
-    # pc_exists = []
-    # for idx, vol in enumerate(vol_addresses):
-    #     result = pc_pattern.search(vol)
-    #     if result is not None:
-    #         pc = f'{result.group(1).upper()} {result.group(2).upper()}'
-    #         postcodes.append(pc)
-    #         pc_exists.append(idx)
 
     if args.plot_vol_locations:
         if len(bads) > 0:
@@ -155,13 +137,7 @@ if __name__ == "__main__":
         plot_locations(positions.longitude, positions.latitude, jitter=30,
                        save_file='volunteer-distribution.pdf', zoom=15)
 
-    #vol_locs = [(lng, lat) for lat, lng in zip(positions.latitude, positions.longitude)]
-    #vol_names = [vol_names[x] for x in pc_exists]
-    #vol_requests = [vol_requests[x] for x in pc_exists]
-
     request_df, r_col_headings = get_df_from_spreadsheet(requests_sheet, r_headings)
-
-    print(r_col_headings)
 
     for idx, request in request_df.iterrows():
         if request['Initials'] == '':
@@ -185,14 +161,19 @@ if __name__ == "__main__":
 
         vols = get_nearest_volunteers(vol_df, request_loc, request['Request'])
 
-        print(vols)
+        description = f"Find volunteer to help {request['Name']} with {request['Request']}\n"
+        description += f"Contact details: {request['Phone Number/email']}\n\n"
+        description += f"Potential volunteers:\n"
 
-        for j, vol in enumerate(vols['Name'].values):
-            print(vol, j)
-            requests_sheet.update_cell(idx+2, r_col_headings['Potential Vol 1']+j, vol)
+        for j, vol in vols.reset_index().iterrows():
+            string = f"- Volunteer {j} is {vol['Name']} "
+            print(string)
+            description += string + f"Prefers contact by {vol['Contact Means']}. "
+            description += f"{vol['Phone number']} {vol['Email address']}\n"
+            requests_sheet.update_cell(idx+2, r_col_headings['Potential Vol 1']+j, vol['Name'])
 
         if args.create_trello:
             # Add trello card for this request
             due_date = datetime.now() + timedelta(7)
-            trello.lists.new_card(list_id, request['Initials'], due_date.isoformat(), desc='Test description')
+            trello.lists.new_card(list_id, request['Initials'], due_date.isoformat(), desc=description)
             requests_sheet.update_cell(idx+2, r_col_headings['Trello Status'], 'TRUE')
