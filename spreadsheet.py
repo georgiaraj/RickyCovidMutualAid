@@ -20,7 +20,9 @@ r_headings = {
 v_headings = {
     'Full Postcode': 'Postcode',
     'How are you able to support your neighbours?': 'Request',
-    'What is the best way for us to contact you if one of your neighbours gets in touch needing help?': 'Contact Means'
+    'What is the best way for us to contact you if one of your neighbours gets in touch needing help?': 'Contact Means',
+    'What is your availability like? ': 'Availability',
+    'Anything you would like to ask or tell us?': 'Notes'
 }
 
 requests = {
@@ -156,24 +158,33 @@ if __name__ == "__main__":
             print(f'Warning: Request missing postcode, skipping')
             continue
 
-        print(f"Find closest volunteer for {request['Name']} at {request_loc} "
-              f"with request type {request['Request']}")
-
         vols = get_nearest_volunteers(vol_df, request_loc, request['Request'])
 
         description = f"Find volunteer to help {request['Name']} with {request['Request']}\n"
-        description += f"Contact details: {request['Phone Number/email']}\n\n"
-        description += f"Potential volunteers:\n"
+        description += f"Contact details: {request['Phone Number/email']}\n"
+        description += f"Original call taken by {request['Call Handler']}\n\n"
+        description += f"Potential volunteers:\n\n"
 
         for j, vol in vols.reset_index().iterrows():
-            string = f"- Volunteer {j} is {vol['Name']} "
-            print(string)
+            string = f"- Volunteer {j+1} is {vol['Name']}. "
             description += string + f"Prefers contact by {vol['Contact Means']}. "
-            description += f"{vol['Phone number']} {vol['Email address']}\n"
+            description += f"{vol['Phone number']} {vol['Email address']}.\n"
+            if vol['Availability']:
+                description += f"Availability: {vol['Availability']}."
+            if vol['Notes']:
+                description += f"Notes: {vol['Notes']}."
+            description += '\n\n'
             requests_sheet.update_cell(idx+2, r_col_headings['Potential Vol 1']+j, vol['Name'])
+
+        description += f"Request required {request['Due Date']}\n\n"
+        description += f"NOTES: {request['Notes']}"
+
+        print(description)
 
         if args.create_trello:
             # Add trello card for this request
-            due_date = datetime.now() + timedelta(7)
-            trello.lists.new_card(list_id, request['Initials'], due_date.isoformat(), desc=description)
+            due_date = datetime.strptime(request['Due Date'], "%d/%m/%Y").date() - timedelta(1)
+            print(due_date)
+            trello.lists.new_card(list_id, request['Initials'], due_date.isoformat(),
+                                  desc=description)
             requests_sheet.update_cell(idx+2, r_col_headings['Trello Status'], 'TRUE')
