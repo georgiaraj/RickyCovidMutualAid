@@ -14,7 +14,8 @@ from postcodes import *
 r_headings = {
     'Initials (Trello)': 'Initials',
     'Postcode (please make sure you enter this, even if approx!)': 'Postcode',
-    'Pharmacy (if applicable)': 'Pharmacy'
+    'Pharmacy (if applicable)': 'Pharmacy',
+    'Referred to another group': 'Referred'
 }
 
 v_headings = {
@@ -90,15 +91,23 @@ if __name__ == "__main__":
     if args.create_trello:
         trello = TrelloApi('96ea110307fae0a88aad529ed8f29423',
                            'b9c9b53acc2f7de0972a217366742f905ee7bb7670662e1aa6897df4fd8cfc23')
-        lists = trello.boards.get_list('KKkfsmg9')
+        trello_lists = trello.boards.get_list('KKkfsmg9')
 
         # Find list id
-        list_id = None
-        for list in lists:
-            if list['name'] == 'Request Needing Volunteer':
-                list_id = list['id']
-                break
-        if list_id is None:
+        lists = {}
+        for l in trello_lists:
+            if l['name'] == 'Request Needing Volunteer':
+                lists['main'] = l['id']
+            elif l['name'] == 'is with CW/MX/CG/NW':
+                lists['referred'] = l['id']
+            elif l['name'] == 'Pharmacist Delite Queue':
+                lists['delite'] = l['id']
+            elif l['name'] == 'Pharmacist Tudor Queue':
+                lists['tudor'] = l['id']
+            elif l['name'] == 'Other Pharmacist Queue':
+                lists['pharmacy'] = l['id']
+
+        if not lists:
             raise RuntimeError('Column not found')
 
     geolocator = Nominatim(user_agent="FindNearestAddr", timeout=1000)
@@ -176,7 +185,7 @@ if __name__ == "__main__":
             description += '\n\n'
             requests_sheet.update_cell(idx+2, r_col_headings['Potential Vol 1']+j, vol['Name'])
 
-        description += f"Request required {request['Due Date']}\n\n"
+        description += f"Request required by {request['Due Date']}\n\n"
         description += f"IMPORTANT INFO: {request['Important Info']}\n"
         description += f"NOTES: {request['Notes']}\n"
 
@@ -189,6 +198,19 @@ if __name__ == "__main__":
             else:
                 # Play safe by adding a date that's soon if not entered.
                 due_date = datetime.now() + timedelta(1)
+
+            list_id = lists['main']
+
+            if request['Referred']:
+                list_id = lists['referred']
+            elif request['Request'] == 'Prescription':
+                if request['Pharmacy'] == 'Tudor':
+                    list_id = lists['tudor']
+                elif request['Pharmacy'] == 'Delite':
+                    list_id = lists['delite']
+                else:
+                    list_id = lists['pharmacy']
+
             trello.lists.new_card(list_id, f"{request['Initials']} - {request['Postcode']}",
                                   due_date.isoformat(), desc=description)
             requests_sheet.update_cell(idx+2, r_col_headings['Trello Status'], 'TRUE')
