@@ -157,8 +157,11 @@ if __name__ == "__main__":
 
         try:
             # Get postcode and lat/long of request
-            location = geolocator.geocode(request['Postcode'])
-            request_loc = (location.longitude, location.latitude)
+            #location = geolocator.geocode(request['Postcode'])
+            #request_loc = (location.longitude, location.latitude)
+            locations, _ = postcodes_data([request['Postcode']])
+            print(locations)
+            request_loc = (locations.iloc[0].longitude, locations.iloc[0].latitude)
         except AttributeError:
             print(f'Warning: Request missing postcode, skipping')
             continue
@@ -174,9 +177,9 @@ if __name__ == "__main__":
         if request['Important Info']:
             description += f"IMPORTANT INFO: {request['Important Info']}\n"
         if request['Notes']:
-            description += f"NOTES: {request['Notes']}\n\n"
+            description += f"NOTES: {request['Notes']}\n"
 
-        description += f"Potential volunteers:\n\n"
+        description += f"\nPotential volunteers:\n\n"
 
         for j, vol in vols.reset_index().iterrows():
             string = f"- Volunteer {j+1} is {vol['Name']}. "

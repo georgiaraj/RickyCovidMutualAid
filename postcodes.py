@@ -17,6 +17,9 @@ def postcodes_data(postcodes):
     Returns a tuple (good_results, bad_postcodes).
     """
 
+    if len(postcodes) == 1:
+        postcodes.append('WD3 TXX')
+
     postcodes = np.sort(np.unique(postcodes))
 
     url = "https://api.postcodes.io/postcodes"
