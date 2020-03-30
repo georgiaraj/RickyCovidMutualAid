@@ -17,7 +17,7 @@ def postcodes_data(postcodes):
     Returns a tuple (good_results, bad_postcodes).
     """
 
-    postcodes = np.unique(postcodes)
+    postcodes = np.sort(np.unique(postcodes))
 
     url = "https://api.postcodes.io/postcodes"
     postcodes = {"postcodes": postcodes}

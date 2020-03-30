@@ -27,8 +27,8 @@ v_headings = {
 }
 
 requests = {
-    'Shopping': 'Picking up shopping and medications',
-    'Prescription': 'Picking up shopping and medications',
+    'Shopping': 'Picking up shopping',
+    'Prescription': 'medications',
     'Energy Top-up': 'Topping up electric or gas keys',
     'Post': 'Posting letters',
     'Phone Call': 'A friendly telephone call',
@@ -134,13 +134,9 @@ if __name__ == "__main__":
     # Format postcodes for volunteers
     vol_df = vol_df.apply(get_formatted_postcode, axis=1)
 
-    positions, bad = postcodes_data(vol_df[vol_df['Postcode exists']]['Postcode'])
+    positions, bad = postcodes_data(vol_df[vol_df['Postcode exists']]['Postcode'].tolist())
 
     vol_df = vol_df.join(positions[['longitude', 'latitude']], on='Postcode', how='left')
-
-    vol_names = vol_sheet.col_values(2)[1:]
-    vol_addresses = vol_sheet.col_values(5)[1:]
-    vol_requests = vol_sheet.col_values(6)[1:]
 
     if args.plot_vol_locations:
         if len(bads) > 0:
@@ -169,9 +165,14 @@ if __name__ == "__main__":
 
         vols = get_nearest_volunteers(vol_df, request_loc, request['Request'])
 
-        description = f"Find volunteer to help {request['Name']} with {request['Request']}\n"
+        description = f"Find volunteer to help {request['Name']} with {request['Request']} on a {request['Regularity']} basis.\n"
         description += f"Contact details: {request['Phone Number/email']} \n"
         description += f"Original call taken by {request['Call Handler']}\n\n"
+
+        description += f"Request required by {request['Due Date']}\n\n"
+        description += f"IMPORTANT INFO: {request['Important Info']}\n"
+        description += f"NOTES: {request['Notes']}\n\n"
+
         description += f"Potential volunteers:\n\n"
 
         for j, vol in vols.reset_index().iterrows():
@@ -184,10 +185,6 @@ if __name__ == "__main__":
                 description += f"Notes: {vol['Notes']}."
             description += '\n\n'
             requests_sheet.update_cell(idx+2, r_col_headings['Potential Vol 1']+j, vol['Name'])
-
-        description += f"Request required by {request['Due Date']}\n\n"
-        description += f"IMPORTANT INFO: {request['Important Info']}\n"
-        description += f"NOTES: {request['Notes']}\n"
 
         print(description)
 
