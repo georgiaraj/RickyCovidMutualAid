@@ -170,8 +170,11 @@ if __name__ == "__main__":
         description += f"Original call taken by {request['Call Handler']}\n\n"
 
         description += f"Request required by {request['Due Date']}\n\n"
-        description += f"IMPORTANT INFO: {request['Important Info']}\n"
-        description += f"NOTES: {request['Notes']}\n\n"
+
+        if request['Important Info']:
+            description += f"IMPORTANT INFO: {request['Important Info']}\n"
+        if request['Notes']:
+            description += f"NOTES: {request['Notes']}\n\n"
 
         description += f"Potential volunteers:\n\n"
 
