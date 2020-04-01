@@ -200,7 +200,9 @@ if __name__ == "__main__":
         if args.create_trello:
             # Add trello card for this request
             if request['Due Date']:
-                due_date = datetime.strptime(request['Due Date'], "%d/%m/%Y").date() - timedelta(1)
+                due_date = datetime.strptime(request['Due Date'], "%d/%m/%Y").date()
+                if request['Request'] != 'Prescription':
+                    due_date -= timedelta(1)
             else:
                 # Play safe by adding a date that's soon if not entered.
                 due_date = datetime.now() + timedelta(1)
