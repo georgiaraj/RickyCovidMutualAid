@@ -67,7 +67,7 @@ def get_nearest_volunteers(vol_df, location, request_type):
 
     vol_df_pcs = vol_df_pcs.sort_values('Distance from')
 
-    return vol_df_pcs.head(5)
+    return vol_df_pcs.head(10)
 
 def get_df_from_spreadsheet(sheet, headings):
     data = sheet.get_all_values()
@@ -104,6 +104,8 @@ if __name__ == "__main__":
                 lists['delite'] = l['id']
             elif l['name'] == 'Pharmacist Tudor Queue':
                 lists['tudor'] = l['id']
+            elif l['name'] == 'Pharmacist Chiefcornerstone Queue':
+                lists['cornerstone'] = l['id']
             elif l['name'] == 'Other Pharmacist Queue':
                 lists['pharmacy'] = l['id']
 
@@ -160,9 +162,8 @@ if __name__ == "__main__":
             #location = geolocator.geocode(request['Postcode'])
             #request_loc = (location.longitude, location.latitude)
             locations, _ = postcodes_data([request['Postcode']])
-            print(locations)
             request_loc = (locations.iloc[0].longitude, locations.iloc[0].latitude)
-        except AttributeError:
+        except:
             print(f'Warning: Request missing postcode, skipping')
             continue
 
@@ -170,7 +171,7 @@ if __name__ == "__main__":
 
         description = f"Find volunteer to help {request['Name']} with {request['Request']} on a {request['Regularity']} basis.\n"
         description += f"Contact details: {request['Phone Number/email']} \n"
-        description += f"Original call taken by {request['Call Handler']}\n\n"
+        description += f"Original call taken by {request['Call Taker']}\n\n"
 
         description += f"Request required by {request['Due Date']}\n\n"
 
@@ -186,9 +187,11 @@ if __name__ == "__main__":
             description += string + f"Prefers contact by {vol['Contact Means']}. "
             description += f"{vol['Phone number']} {vol['Email address']}.\n"
             if vol['Availability']:
-                description += f"Availability: {vol['Availability']}."
+                description += f"Availability: {vol['Availability']}. "
             if vol['Notes']:
-                description += f"Notes: {vol['Notes']}."
+                description += f"Notes: {vol['Notes']}. "
+            if vol['Current Important Info']:
+                description += f"IMPORTANT VOLUNTEER INFO: {vol['Current Important Info']}."
             description += '\n\n'
             requests_sheet.update_cell(idx+2, r_col_headings['Potential Vol 1']+j, vol['Name'])
 
@@ -204,16 +207,21 @@ if __name__ == "__main__":
 
             list_id = lists['main']
 
+            card_title = f"{request['Initials']} - {request['Postcode']}"
+
             if request['Referred']:
                 list_id = lists['referred']
             elif request['Request'] == 'Prescription':
+                card_title += f" - {request['Pharmacy']}"
                 if request['Pharmacy'] == 'Tudor':
                     list_id = lists['tudor']
+                elif request['Pharmacy'] == 'The Chiefcornerstone':
+                    list_id = lists['cornerstone']
                 elif request['Pharmacy'] == 'Delite':
                     list_id = lists['delite']
                 else:
                     list_id = lists['pharmacy']
 
-            trello.lists.new_card(list_id, f"{request['Initials']} - {request['Postcode']}",
+            trello.lists.new_card(list_id, card_title,
                                   due_date.isoformat(), desc=description)
             requests_sheet.update_cell(idx+2, r_col_headings['Trello Status'], 'TRUE')
