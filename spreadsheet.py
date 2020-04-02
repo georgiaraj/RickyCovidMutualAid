@@ -170,6 +170,7 @@ if __name__ == "__main__":
         vols = get_nearest_volunteers(vol_df, request_loc, request['Request'])
 
         description = f"Find volunteer to help {request['Name']} with {request['Request']} on a {request['Regularity']} basis.\n"
+        description += f"Address: {request['Address']} {request['Postcode']}\n"
         description += f"Contact details: {request['Phone Number/email']} \n"
         description += f"Original call taken by {request['Call Taker']}\n\n"
 
@@ -197,7 +198,7 @@ if __name__ == "__main__":
 
         print(description)
 
-        if args.create_trello:
+        if request['Call Taker'] and request['Due Date'] and args.create_trello:
             # Add trello card for this request
             if request['Due Date']:
                 due_date = datetime.strptime(request['Due Date'], "%d/%m/%Y").date()
