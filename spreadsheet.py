@@ -1,5 +1,6 @@
 import gspread
 from datetime import datetime, timedelta
+from dateutils.relativedelta import relativedelta
 import re, requests
 import geopy
 import argparse
@@ -153,8 +154,13 @@ if __name__ == "__main__":
             print(f'No further requests found.')
             break
 
+        due_date = datetime.strptime(request['Due Date'], "%d/%m/%Y").date()
+
         if request['Trello Status'] == 'TRUE':
             print(f'Skipping request because request completed')
+            if request['Request'] == 'Prescription' and \
+               due_date + relativedelta(month+1) - timedelta(1) == datetime.today()
+            requests_sheet.update_cell(idx+2, r_col_headings['Trello Status'], 'FALSE')
             continue
 
         try:
@@ -201,7 +207,6 @@ if __name__ == "__main__":
         if request['Call Taker'] and request['Due Date'] and args.create_trello:
             # Add trello card for this request
             if request['Due Date']:
-                due_date = datetime.strptime(request['Due Date'], "%d/%m/%Y").date()
                 if request['Request'] != 'Prescription':
                     due_date -= timedelta(1)
             else:
