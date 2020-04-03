@@ -44,6 +44,7 @@ def get_args():
                         help='If set, the volunteer locations will be printed')
     parser.add_argument('--test_mode', action='store_true',
                         help='If set, the test spreadsheet will be used')
+    parser.add_argument('--verbose', action='store_true')
     return parser.parse_args()
 
 
@@ -91,23 +92,30 @@ if __name__ == "__main__":
     if args.create_trello:
         trello = TrelloApi('96ea110307fae0a88aad529ed8f29423',
                            'b9c9b53acc2f7de0972a217366742f905ee7bb7670662e1aa6897df4fd8cfc23')
-        trello_lists = trello.boards.get_list('KKkfsmg9')
+        trello_lists_general = trello.boards.get_list('KKkfsmg9')
+        trello_lists_presc = trello.boards.get_list('YD9AW0Hb')
 
         # Find list id
         lists = {}
-        for l in trello_lists:
+        for l in trello_lists_general:
             if l['name'] == 'Request Needing Volunteer':
                 lists['main'] = l['id']
             elif l['name'] == 'is with CW/MX/CG/NW':
                 lists['referred'] = l['id']
-            elif l['name'] == 'Pharmacist Delite Queue':
+
+        for l in trello_lists_presc:
+            if l['name'] == 'Delite Queue':
                 lists['delite'] = l['id']
-            elif l['name'] == 'Pharmacist Tudor Queue':
+            elif l['name'] == 'Tudor Queue':
                 lists['tudor'] = l['id']
-            elif l['name'] == 'Pharmacist Chiefcornerstone Queue':
+            elif l['name'] == 'Chiefcornerstone Queue':
                 lists['cornerstone'] = l['id']
-            elif l['name'] == 'Other Pharmacist Queue':
-                lists['pharmacy'] = l['id']
+            elif l['name'] == 'Boots Queue':
+                lists['boots'] = l['id']
+            elif l['name'] == 'Riverside Queue':
+                lists['riverside'] = l['id']
+            elif l['name'] == 'Dave Queue':
+                lists['dave'] = l['id']
 
         if not lists:
             raise RuntimeError('Column not found')
@@ -154,7 +162,8 @@ if __name__ == "__main__":
             break
 
         if request['Trello Status'] == 'TRUE':
-            print(f'Skipping request because request completed')
+            if args.verbose:
+                print(f'Skipping request because request completed')
             continue
 
         try:
@@ -196,9 +205,15 @@ if __name__ == "__main__":
             description += '\n\n'
             requests_sheet.update_cell(idx+2, r_col_headings['Potential Vol 1']+j, vol['Name'])
 
-        print(description)
+        #print(description)
 
-        if request['Call Taker'] and request['Due Date'] and args.create_trello:
+        if args.create_trello:
+
+            if not request['Call Taker'] or not request['Due Date']:
+                print(f"Warning: Trello card not created for {request['Initials']} "
+                      'as call taker or due date info missing')
+                continue
+
             # Add trello card for this request
             if request['Due Date']:
                 due_date = datetime.strptime(request['Due Date'], "%d/%m/%Y").date()
@@ -222,9 +237,15 @@ if __name__ == "__main__":
                     list_id = lists['cornerstone']
                 elif request['Pharmacy'] == 'Delite':
                     list_id = lists['delite']
+                elif request['Pharmacy'] == 'Boots':
+                    list_id = lists['boots']
+                elif request['Pharmacy'] == 'Riverside':
+                    list_id = lists['riverside']
                 else:
-                    list_id = lists['pharmacy']
+                    print(f"Warning: prescription request pharmacy for {request['Initials']} "
+                          'not recognised - put into general request queue')
 
             trello.lists.new_card(list_id, card_title,
                                   due_date.isoformat(), desc=description)
             requests_sheet.update_cell(idx+2, r_col_headings['Trello Status'], 'TRUE')
+            print("Trello card created for {request['Initials']}.")
