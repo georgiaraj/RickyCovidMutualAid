@@ -161,10 +161,10 @@ if __name__ == "__main__":
             # Get postcode and lat/long of request
             #location = geolocator.geocode(request['Postcode'])
             #request_loc = (location.longitude, location.latitude)
-            locations, _ = postcodes_data([request['Postcode']])
+            locations, bad = postcodes_data([request['Postcode']])
             request_loc = (locations.iloc[0].longitude, locations.iloc[0].latitude)
         except:
-            print(f'Warning: Request missing postcode, skipping')
+            print(f"Warning: Request {request['Initials']} missing or incorrect postcode, skipping")
             continue
 
         vols = get_nearest_volunteers(vol_df, request_loc, request['Request'])
