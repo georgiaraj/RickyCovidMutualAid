@@ -15,7 +15,8 @@ r_headings = {
     'Initials (Trello)': 'Initials',
     'Postcode (please make sure you enter this, even if approx!)': 'Postcode',
     'Pharmacy (if applicable)': 'Pharmacy',
-    'Referred to another group': 'Referred'
+    'Referred to another group': 'Referred',
+    'Prescription Needs Payment': 'Needs Payment'
 }
 
 v_headings = {
@@ -144,12 +145,13 @@ if __name__ == "__main__":
     # Format postcodes for volunteers
     vol_df = vol_df.apply(get_formatted_postcode, axis=1)
 
-    positions, bad = postcodes_data(vol_df[vol_df['Postcode exists']]['Postcode'].tolist())
+    #TODO!!!! Make this able to cope with more entries!!
+    positions, bad = postcodes_data(vol_df[vol_df['Postcode exists']]['Postcode'].tolist()[:125])
 
     vol_df = vol_df.join(positions[['longitude', 'latitude']], on='Postcode', how='left')
 
     if args.plot_vol_locations:
-        if len(bads) > 0:
+        if len(bad) > 0:
             print(f'Warning: bad postcodes entered, {bads}, not printed on volunteer distribution')
         plot_locations(positions.longitude, positions.latitude, jitter=30,
                        save_file='volunteer-distribution.pdf', zoom=15)
@@ -179,6 +181,10 @@ if __name__ == "__main__":
         vols = get_nearest_volunteers(vol_df, request_loc, request['Request'])
 
         description = f"Find volunteer to help {request['Name']} with {request['Request']} on a {request['Regularity']} basis.\n"
+        if request['Request'] == 'Prescription':
+            print(request['Needs Payment'])
+            needs = 'needs payment' if request['Needs Payment'] == 'TRUE' else 'does not need payment'
+            description += f'This prescription {needs}.\n'
         description += f"Address: {request['Address']} {request['Postcode']}\n"
         description += f"Contact details: {request['Phone Number/email']} \n"
         description += f"Original call taken by {request['Call Taker']}\n\n"
@@ -190,20 +196,21 @@ if __name__ == "__main__":
         if request['Notes']:
             description += f"NOTES: {request['Notes']}\n"
 
-        description += f"\nPotential volunteers:\n\n"
+        if request['Request'] != 'Prescription':
+            description += f"\nPotential volunteers:\n\n"
 
-        for j, vol in vols.reset_index().iterrows():
-            string = f"- Volunteer {j+1} is {vol['Name']}. "
-            description += string + f"Prefers contact by {vol['Contact Means']}. "
-            description += f"{vol['Phone number']} {vol['Email address']}.\n"
-            if vol['Availability']:
-                description += f"Availability: {vol['Availability']}. "
-            if vol['Notes']:
-                description += f"Notes: {vol['Notes']}. "
-            if vol['Current Important Info']:
-                description += f"IMPORTANT VOLUNTEER INFO: {vol['Current Important Info']}."
-            description += '\n\n'
-            requests_sheet.update_cell(idx+2, r_col_headings['Potential Vol 1']+j, vol['Name'])
+            for j, vol in vols.reset_index().iterrows():
+                string = f"- Volunteer {j+1} is {vol['Name']}. "
+                description += string + f"Prefers contact by {vol['Contact Means']}. "
+                description += f"{vol['Phone number']} {vol['Email address']}.\n"
+                if vol['Availability']:
+                    description += f"Availability: {vol['Availability']}. "
+                if vol['Notes']:
+                    description += f"Notes: {vol['Notes']}. "
+                if vol['Current Important Info']:
+                    description += f"IMPORTANT VOLUNTEER INFO: {vol['Current Important Info']}."
+                description += '\n\n'
+                requests_sheet.update_cell(idx+2, r_col_headings['Potential Vol 1']+j, vol['Name'])
 
         #print(description)
 
@@ -241,6 +248,8 @@ if __name__ == "__main__":
                     list_id = lists['boots']
                 elif request['Pharmacy'] == 'Riverside':
                     list_id = lists['riverside']
+                elif request['Pharmacy'] == 'Dave':
+                    list_id = lists['dave']
                 else:
                     print(f"Warning: prescription request pharmacy for {request['Initials']} "
                           'not recognised - put into general request queue')
@@ -248,4 +257,4 @@ if __name__ == "__main__":
             trello.lists.new_card(list_id, card_title,
                                   due_date.isoformat(), desc=description)
             requests_sheet.update_cell(idx+2, r_col_headings['Trello Status'], 'TRUE')
-            print("Trello card created for {request['Initials']}.")
+            print(f"Trello card created for {request['Initials']}.")
