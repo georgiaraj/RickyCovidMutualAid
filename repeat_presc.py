@@ -58,6 +58,9 @@ if __name__ == "__main__":
         if any(rep in card['desc'] for rep in repeat_opts) and \
            due_date < datetime.now():
             reset_list.append(card)
+        else:
+            if args.verbose:
+                print(f"Card {card['name']} not moved.")
 
     for card in reset_list:
         add_days = None
@@ -71,12 +74,10 @@ if __name__ == "__main__":
 
         due_date = date_parser.isoparse(card['due']).replace(tzinfo=None) + add_days
         trello.cards.update_due(card['id'], due_date.isoformat())
-        if args.verbose:
-            print(f"Due date for card {card['name']} updated to {due_date}")
+        print(f"Due date for card {card['name']} updated to {due_date}")
 
         for phar in pharmacies:
             if phar in card['name'] or phar in card['desc']:
                 trello.cards.update_idList(card['id'], lists[phar])
-                if args.verbose:
-                    print(f"Card {card['name']} moved to {lists[phar]}")
+                print(f"Card {card['name']} moved to {lists[phar]}")
                 break
