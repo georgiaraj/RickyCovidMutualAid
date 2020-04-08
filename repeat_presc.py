@@ -24,6 +24,8 @@ pharmacies = [
 def get_args():
     parser = argparse.ArgumentParser('Google sheets trello script')
     parser.add_argument('--verbose', action='store_true')
+    parser.add_argument('--process_general', action='store_true',
+                        help='If we need to find prescription repeats in the general board')
     return parser.parse_args()
 
 
@@ -33,29 +35,42 @@ if __name__ == "__main__":
 
     trello = TrelloApi('96ea110307fae0a88aad529ed8f29423',
                        'b9c9b53acc2f7de0972a217366742f905ee7bb7670662e1aa6897df4fd8cfc23')
-    trello_lists_presc = trello.boards.get_list('YD9AW0Hb')
 
-    lists = {}
+    output_board_id = 'YD9AW0Hb'
+    trello_lists_presc = trello.boards.get_list(output_board_id)
+
+    if args.process_general:
+        trello_lists_input = trello.boards.get_list('KKkfsmg9')
+    else:
+        trello_lists_input = trello_lists_presc
+
+    lists_input = {}
+
+    for l in trello_lists_input:
+        if l['name'] == 'Volunteer Reported Back Completion':
+            lists_input['completed'] = l['id']
+        elif l['name'] == 'Checked with Requestor':
+            lists_input['checked'] = l['id']
+
+    lists_output = {}
 
     for l in trello_lists_presc:
         for phar in pharmacies:
             if l['name'] == phar+' Queue':
-                lists[phar] = l['id']
-
-        if l['name'] == 'Volunteer Reported Back Completion':
-            lists['completed'] = l['id']
-        elif l['name'] == 'Checked with Requestor':
-            lists['checked'] = l['id']
+                lists_output[phar] = l['id']
 
     old_cards = []
-    for lname in ['checked']: #, 'completed']:
-        old_cards.extend(trello.lists.get_card(lists[lname]))
+    for lname in lists_input.keys():
+        old_cards.extend(trello.lists.get_card(lists_input[lname]))
 
     reset_list = []
 
     for card in old_cards:
+        if card['due'] is None:
+            continue
         due_date = date_parser.isoparse(card['due']).replace(tzinfo=None)
-        if any(rep in card['desc'] for rep in repeat_opts) and \
+        if 'Prescription' in card['desc'] and \
+           any(rep in card['desc'] for rep in repeat_opts) and \
            due_date < datetime.now():
             reset_list.append(card)
         else:
@@ -72,12 +87,16 @@ if __name__ == "__main__":
             print(f"Warning: No repeat option found for card {card['name']}, not moved")
             continue
 
-        due_date = date_parser.isoparse(card['due']).replace(tzinfo=None) + add_days
-        trello.cards.update_due(card['id'], due_date.isoformat())
-        print(f"Due date for card {card['name']} updated to {due_date}")
+        if not args.process_general:
+            for phar in pharmacies:
+                if phar in card['name'] or phar in card['desc']:
+                    trello.cards.update_idList(card['id'], lists_output[phar])
+                    print(f"Card {card['name']} moved to {lists_output[phar]}")
+                    break
 
-        for phar in pharmacies:
-            if phar in card['name'] or phar in card['desc']:
-                trello.cards.update_idList(card['id'], lists[phar])
-                print(f"Card {card['name']} moved to {lists[phar]}")
-                break
+        due_date = date_parser.isoparse(card['due']).replace(tzinfo=None) + add_days
+        #trello.cards.update_due(card['id'], due_date.isoformat())
+        trello.cards.update(card['id'], due=due_date.isoformat(), dueComplete=0)
+        trello.cards.new_action_comment(card['id'],
+                                        'Repeat prescription - card moved back to pharmacy queue')
+        print(f"Due date for card {card['name']} updated to {due_date}")
