@@ -55,9 +55,10 @@ if __name__ == "__main__":
     lists_output = {}
 
     for l in trello_lists_presc:
-        for phar in pharmacies:
-            if l['name'] == phar+' Queue':
-                lists_output[phar] = l['id']
+        if l['name'] == 'Longer Term Repeats':
+            lists_output['long term'] = l['id']
+        elif l['name'] == 'Awaiting Allocation':
+            lists_output['allocation'] = l['id']
 
     old_cards = []
     for lname in lists_input.keys():
@@ -88,11 +89,8 @@ if __name__ == "__main__":
             continue
 
         if not args.process_general:
-            for phar in pharmacies:
-                if phar in card['name'] or phar in card['desc']:
-                    trello.cards.update_idList(card['id'], lists_output[phar])
-                    print(f"Card {card['name']} moved to {lists_output[phar]}")
-                    break
+            trello.cards.update_idList(card['id'], lists_output['long term'])
+            print(f"Card {card['name']} moved to longer term list")
 
         due_date = date_parser.isoparse(card['due']).replace(tzinfo=None) + add_days
         #trello.cards.update_due(card['id'], due_date.isoformat())

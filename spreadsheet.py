@@ -25,7 +25,8 @@ v_headings = {
     'How are you able to support your neighbours?': 'Request',
     'What is the best way for us to contact you if one of your neighbours gets in touch needing help?': 'Contact Means',
     'What is your availability like? ': 'Availability',
-    'Anything you would like to ask or tell us?': 'Notes'
+    'Anything you would like to ask or tell us?': 'Notes',
+    'Out of Action For General Requests Until': 'Out of Action'
 }
 
 requests = {
@@ -63,7 +64,9 @@ def get_formatted_postcode(row):
 def get_nearest_volunteers(vol_df, location, request_type):
 
     vol_df_pcs = vol_df[vol_df['Postcode exists'] &
-                        vol_df['Request'].str.contains(requests[request_type])].copy()
+                        vol_df['Request'].str.contains(requests[request_type]) &
+                        (vol_df['Out of Action'].isnull() |
+                         (vol_df['Out of Action'] < datetime.now()))].copy()
 
     vol_df_pcs['Distance from'] = distance_between(location, vol_df_pcs['longitude'],
                                                    vol_df_pcs['latitude'])
@@ -106,18 +109,8 @@ if __name__ == "__main__":
                 lists['referred'] = l['id']
 
         for l in trello_lists_presc:
-            if l['name'] == 'Delite Queue':
-                lists['delite'] = l['id']
-            elif l['name'] == 'Tudor Queue':
-                lists['tudor'] = l['id']
-            elif l['name'] == 'Chiefcornerstone Queue':
-                lists['cornerstone'] = l['id']
-            elif l['name'] == 'Boots Queue':
-                lists['boots'] = l['id']
-            elif l['name'] == 'Riverside Queue':
-                lists['riverside'] = l['id']
-            elif l['name'] == 'Dave Queue':
-                lists['dave'] = l['id']
+            if l['name'] == 'Awaiting Allocation':
+                lists['pharmacy'] = l['id']
 
         if not lists:
             raise RuntimeError('Column not found')
@@ -139,6 +132,8 @@ if __name__ == "__main__":
 
     # Extract and print all of the volunteer postcodes
     vol_df, v_col_headings = get_df_from_spreadsheet(vol_sheet, v_headings)
+
+    vol_df['Out of Action'] = pd.to_datetime(vol_df['Out of Action'])
 
     vol_df['Postcode exists'] = [False] * len(vol_df.index)
     #vol_df['Longitude'] = [(0.0,0.0)] * len(vol_df.index)
@@ -239,21 +234,7 @@ if __name__ == "__main__":
                 list_id = lists['referred']
             elif request['Request'] == 'Prescription':
                 card_title += f" - {request['Pharmacy']}"
-                if request['Pharmacy'] == 'Tudor':
-                    list_id = lists['tudor']
-                elif request['Pharmacy'] == 'The Chiefcornerstone':
-                    list_id = lists['cornerstone']
-                elif request['Pharmacy'] == 'Delite':
-                    list_id = lists['delite']
-                elif request['Pharmacy'] == 'Boots':
-                    list_id = lists['boots']
-                elif request['Pharmacy'] == 'Riverside':
-                    list_id = lists['riverside']
-                elif request['Pharmacy'] == 'Dave':
-                    list_id = lists['dave']
-                else:
-                    print(f"Warning: prescription request pharmacy for {request['Initials']} "
-                          'not recognised - put into general request queue')
+                list_id = lists['pharmacy']
 
             trello.lists.new_card(list_id, card_title,
                                   due_date.isoformat(), desc=description)
