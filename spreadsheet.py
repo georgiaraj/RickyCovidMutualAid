@@ -16,7 +16,8 @@ r_headings = {
     'Postcode (please make sure you enter this, even if approx!)': 'Postcode',
     'Pharmacy (if applicable)': 'Pharmacy',
     'Referred to another group': 'Referred',
-    'Prescription Needs Payment': 'Needs Payment'
+    'Prescription Needs Payment': 'Needs Payment',
+    'Prescription NOT at Pharmacy': 'Not At Pharmacy'
 }
 
 v_headings = {
@@ -182,9 +183,9 @@ if __name__ == "__main__":
 
         description = f"Find volunteer to help {request['Name']} with {request['Request']} on a {request['Regularity']} basis.\n"
         if request['Request'] == 'Prescription':
-            print(request['Needs Payment'])
             needs = 'needs payment' if request['Needs Payment'] == 'TRUE' else 'does not need payment'
-            description += f'This prescription {needs}.\n'
+            p_loc = 'NOT yet at pharmacy' if request['Not At Pharmacy'] == 'TRUE' else 'at pharmacy'
+            description += f'This prescription {needs} and is {p_loc}.\n'
         description += f"Address: {request['Address']} {request['Postcode']}\n"
         description += f"Contact details: {request['Phone Number/email']} \n"
         description += f"Original call taken by {request['Call Taker']}\n\n"
@@ -223,7 +224,7 @@ if __name__ == "__main__":
 
             # Add trello card for this request
             if request['Due Date']:
-                due_date = datetime.strptime(request['Due Date'], "%d/%m/%Y").date()
+                due_date = datetime.strptime(request['Due Date'], "%d/%m/%y").date()
                 if request['Request'] != 'Prescription':
                     due_date -= timedelta(1)
             else:
