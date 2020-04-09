@@ -142,8 +142,24 @@ if __name__ == "__main__":
     vol_df = vol_df.apply(get_formatted_postcode, axis=1)
 
     #TODO!!!! Make this able to cope with more entries!!
-    positions, bad = postcodes_data(vol_df[vol_df['Postcode exists']]['Postcode'].tolist()[:125])
+    postcodes = vol_df[vol_df['Postcode exists']]['Postcode'].tolist()
 
+    print(len(postcodes))
+
+    positions = pd.DataFrame()
+    bads = pd.DataFrame()
+    chunk_size = 100
+    for i in range(0, len(postcodes), chunk_size):
+        print(postcodes[i:i+chunk_size])
+        pos, bad = postcodes_data(postcodes[i:i+chunk_size])
+        positions = positions.append(pos)
+        bads = bads.append(bads)
+    print(positions.shape)
+
+    #print(positions)
+    positions.drop_duplicates(subset="postcode", keep='first', inplace=True)
+
+    print(positions.shape)
     vol_df = vol_df.join(positions[['longitude', 'latitude']], on='Postcode', how='left')
 
     if args.plot_vol_locations:
