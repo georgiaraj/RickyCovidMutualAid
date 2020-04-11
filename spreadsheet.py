@@ -26,7 +26,8 @@ v_headings = {
     'What is the best way for us to contact you if one of your neighbours gets in touch needing help?': 'Contact Means',
     'What is your availability like? ': 'Availability',
     'Anything you would like to ask or tell us?': 'Notes',
-    'Out of Action For General Requests Until': 'Out of Action'
+    'Out of Action For General Requests Until': 'Out of Action',
+    'Qualified Counsellor/MH Specialist': 'Counsellor'
 }
 
 requests = {
@@ -38,6 +39,7 @@ requests = {
     'Dog Walk': 'Dog walking'
 }
 
+num_vols = 10
 
 def get_args():
     parser = argparse.ArgumentParser('Google sheets trello script')
@@ -63,17 +65,26 @@ def get_formatted_postcode(row):
 
 def get_nearest_volunteers(vol_df, location, request_type):
 
-    vol_df_pcs = vol_df[vol_df['Postcode exists'] &
-                        vol_df['Request'].str.contains(requests[request_type]) &
-                        (vol_df['Out of Action'].isnull() |
-                         (vol_df['Out of Action'] < datetime.now()))].copy()
+    if request_type == 'Phone Call':
+        vols = vol_df[vol_df['Counsellor']=='TRUE'].sample(n=2, replace=True).drop_duplicates('Name')
 
-    vol_df_pcs['Distance from'] = distance_between(location, vol_df_pcs['longitude'],
-                                                   vol_df_pcs['latitude'])
+        vol_df_pcs = vol_df[vol_df['Request'].str.contains(requests[request_type])
+                            & ~vol_df['Request'].str.contains(requests['Shopping'])
+                            & ~vol_df['Request'].str.contains(requests['Prescription'])]
+        return vols.append(vol_df_pcs.sample(n=num_vols-len(vols.index)))
+    else:
 
-    vol_df_pcs = vol_df_pcs.sort_values('Distance from')
+        vol_df_pcs = vol_df[vol_df['Postcode exists'] &
+                            vol_df['Request'].str.contains(requests[request_type]) &
+                            (vol_df['Out of Action'].isnull() |
+                             (vol_df['Out of Action'] < datetime.now()))].copy()
 
-    return vol_df_pcs.head(10)
+        vol_df_pcs['Distance from'] = distance_between(location, vol_df_pcs['longitude'],
+                                                       vol_df_pcs['latitude'])
+
+        vol_df_pcs = vol_df_pcs.sort_values('Distance from')
+
+        return vol_df_pcs.head(num_vols)
 
 def get_df_from_spreadsheet(sheet, headings):
     data = sheet.get_all_values()
