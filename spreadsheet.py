@@ -214,7 +214,7 @@ if __name__ == "__main__":
             description += f"\nPotential volunteers:\n\n"
 
             for j, vol in vols.reset_index().iterrows():
-                string = f"- Volunteer {j+1} is {vol['Name']}. "
+                string = f"- Volunteer {j+1} is {vol['Name']}. Postcode {vol['Postcode']}. "
                 description += string + f"Prefers contact by {vol['Contact Means']}. "
                 description += f"{vol['Phone number']} {vol['Email address']}.\n"
                 if vol['Availability']:
@@ -230,9 +230,9 @@ if __name__ == "__main__":
 
         if args.create_trello:
 
-            if not request['Call Taker'] or not request['Due Date']:
+            if not request['Call Taker'] or not request['Due Date'] or not request['Address']:
                 print(f"Warning: Trello card not created for {request['Initials']} "
-                      'as call taker or due date info missing')
+                      'as either address, call taker, or due date info missing')
                 continue
 
             # Add trello card for this request
