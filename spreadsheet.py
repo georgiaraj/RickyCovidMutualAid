@@ -33,13 +33,21 @@ v_headings = {
 requests = {
     'Shopping': 'Picking up shopping',
     'Prescription': 'medications',
+    'GP Surgery': 'medications',
     'Energy Top-up': 'Topping up electric or gas keys',
     'Post': 'Posting letters',
     'Phone Call': 'A friendly telephone call',
-    'Dog Walk': 'Dog walking'
+    'Dog Walk': 'Dog walking',
+    'Other': 'urgent supplies'
 }
 
+presc_board_requests = [
+    'Prescription',
+    'GP Surgery'
+]
+
 num_vols = 10
+num_phone_spec_vols = 2
 
 def get_args():
     parser = argparse.ArgumentParser('Google sheets trello script')
@@ -66,11 +74,18 @@ def get_formatted_postcode(row):
 def get_nearest_volunteers(vol_df, location, request_type):
 
     if request_type == 'Phone Call':
-        vols = vol_df[vol_df['Counsellor']=='TRUE'].sample(n=2, replace=True).drop_duplicates('Name')
+        vols = vol_df[vol_df['Counsellor']=='TRUE']
+        if len(vols.index) < num_phone_spec_vols:
+            replace_vols = True
+        else:
+            replace_vols = False
+
+        vols = vols.sample(n=num_phone_spec_vols, replace=replace_vols).drop_duplicates('Name')
 
         vol_df_pcs = vol_df[vol_df['Request'].str.contains(requests[request_type])
                             & ~vol_df['Request'].str.contains(requests['Shopping'])
-                            & ~vol_df['Request'].str.contains(requests['Prescription'])]
+                            & ~vol_df['Request'].str.contains(requests['Prescription'])
+                            & vol_df['Counsellor']=='FALSE']
         return vols.append(vol_df_pcs.sample(n=num_vols-len(vols.index)))
     else:
 
@@ -192,8 +207,6 @@ if __name__ == "__main__":
             print(f"Warning: Request {request['Initials']} missing or incorrect postcode, skipping")
             continue
 
-        vols = get_nearest_volunteers(vol_df, request_loc, request['Request'])
-
         description = f"Find volunteer to help {request['Name']} with {request['Request']} on a {request['Regularity']} basis.\n"
         if request['Request'] == 'Prescription':
             needs = 'needs payment' if request['Needs Payment'] == 'TRUE' else 'does not need payment'
@@ -210,7 +223,14 @@ if __name__ == "__main__":
         if request['Notes']:
             description += f"NOTES: {request['Notes']}\n"
 
-        if request['Request'] != 'Prescription':
+        if request['Request'] == 'Phone Call':
+            description += "PHONE CALL PROCESS: Phone calls should first be passed to one of the "
+            description += "approved screeners on this list for a screening call. After that, "
+            description += "if appropriate, they can be set up with one of the other volunteers "
+            description += "for a regular chat.\n"
+        elif request['Request'] not in presc_board_requests:
+            vols = get_nearest_volunteers(vol_df, request_loc, request['Request'])
+
             description += f"\nPotential volunteers:\n\n"
 
             for j, vol in vols.reset_index().iterrows():
@@ -222,11 +242,14 @@ if __name__ == "__main__":
                 if vol['Notes']:
                     description += f"Notes: {vol['Notes']}. "
                 if vol['Current Important Info']:
-                    description += f"IMPORTANT VOLUNTEER INFO: {vol['Current Important Info']}."
+                    description += f"IMPORTANT VOLUNTEER INFO: {vol['Current Important Info']}.\n"
+                if request['Request'] == 'Phone Call' and vol['Counsellor'] == 'TRUE':
+                    description += f"QUALIFIED COUNSELLER - Please use for screening phone calls"
                 description += '\n\n'
                 requests_sheet.update_cell(idx+2, r_col_headings['Potential Vol 1']+j, vol['Name'])
 
-        #print(description)
+        if args.verbose:
+            print(description)
 
         if args.create_trello:
 
@@ -238,11 +261,8 @@ if __name__ == "__main__":
             # Add trello card for this request
             if request['Due Date']:
                 due_date = datetime.strptime(request['Due Date'], "%d/%m/%y").date()
-                if request['Request'] != 'Prescription':
+                if request['Request'] not in presc_board_requests:
                     due_date -= timedelta(1)
-            else:
-                # Play safe by adding a date that's soon if not entered.
-                due_date = datetime.now() + timedelta(1)
 
             list_id = lists['main']
 
@@ -250,8 +270,11 @@ if __name__ == "__main__":
 
             if request['Referred']:
                 list_id = lists['referred']
-            elif request['Request'] == 'Prescription':
-                card_title += f" - {request['Pharmacy']}"
+            elif request['Request'] in presc_board_requests:
+                if request['Request'] == 'Prescription':
+                    card_title += f" - {request['Pharmacy']}"
+                else:
+                    card_title += " - GP Surgery"
                 list_id = lists['pharmacy']
 
             trello.lists.new_card(list_id, card_title,
