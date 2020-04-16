@@ -78,6 +78,7 @@ if __name__ == "__main__":
             if args.verbose:
                 print(f"Card {card['name']} not moved.")
 
+    # Reset cards by setting new due date and marking as incomplete, and moving to long term list
     for card in reset_list:
         add_days = None
         for rep, interval in repeat_opts.items():
@@ -96,5 +97,16 @@ if __name__ == "__main__":
         #trello.cards.update_due(card['id'], due_date.isoformat())
         trello.cards.update(card['id'], due=due_date.isoformat(), dueComplete=0)
         trello.cards.new_action_comment(card['id'],
-                                        'Repeat prescription - card moved back to pharmacy queue')
+                                        'Repeat prescription - card moved to longer term requests')
         print(f"Due date for card {card['name']} updated to {due_date}")
+
+
+    # Move any cards in the long term list that are coming soon into awaiting allocation
+    long_term = trello.lists.get_card(lists_output['long_term'])
+
+    for card in long_term:
+        if date_parser.isoparse(card['due']).replace(tzinfo=None) < datetime.now() + timedelta(5):
+            trello.cards.update_idList(card['id'], lists_output['allocation'])
+            trello.cards.new_action_comment(card['id'],
+                        'Repeat prescription - card moved to awaiting allocation as needed soon')
+            print(f"Move card {card['name']} from longer term to awaiting allocation")
