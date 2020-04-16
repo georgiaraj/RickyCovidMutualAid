@@ -82,10 +82,11 @@ def get_nearest_volunteers(vol_df, location, request_type):
 
         vols = vols.sample(n=num_phone_spec_vols, replace=replace_vols).drop_duplicates('Name')
 
+
+        # TODO filter out the counsellor here!
         vol_df_pcs = vol_df[vol_df['Request'].str.contains(requests[request_type])
                             & ~vol_df['Request'].str.contains(requests['Shopping'])
-                            & ~vol_df['Request'].str.contains(requests['Prescription'])
-                            & vol_df['Counsellor']=='FALSE']
+                            & ~vol_df['Request'].str.contains(requests['Prescription'])]
         return vols.append(vol_df_pcs.sample(n=num_vols-len(vols.index)))
     else:
 
@@ -110,6 +111,12 @@ def get_df_from_spreadsheet(sheet, headings):
     df = pd.DataFrame(data[1:], columns=col_headings.keys())
 
     return df.copy(), col_headings
+
+
+def request_error(sheet, headings, error_message):
+    print(error_message)
+    sheet.update_cell(idx+2, headings['Trello Error'], error_message)
+
 
 if __name__ == "__main__":
 
@@ -204,7 +211,8 @@ if __name__ == "__main__":
             locations, bad = postcodes_data([request['Postcode']])
             request_loc = (locations.iloc[0].longitude, locations.iloc[0].latitude)
         except:
-            print(f"Warning: Request {request['Initials']} missing or incorrect postcode, skipping")
+            request_error(requests_sheet, r_col_headings,
+                          f"Warning: Request {request['Initials']} missing or incorrect postcode, skipping")
             continue
 
         description = f"Find volunteer to help {request['Name']} with {request['Request']} on a {request['Regularity']} basis.\n"
@@ -228,7 +236,8 @@ if __name__ == "__main__":
             description += "approved screeners on this list for a screening call. After that, "
             description += "if appropriate, they can be set up with one of the other volunteers "
             description += "for a regular chat.\n"
-        elif request['Request'] not in presc_board_requests:
+
+        if request['Request'] not in presc_board_requests:
             vols = get_nearest_volunteers(vol_df, request_loc, request['Request'])
 
             description += f"\nPotential volunteers:\n\n"
@@ -254,8 +263,9 @@ if __name__ == "__main__":
         if args.create_trello:
 
             if not request['Call Taker'] or not request['Due Date'] or not request['Address']:
-                print(f"Warning: Trello card not created for {request['Initials']} "
-                      'as either address, call taker, or due date info missing')
+                request_error(requests_sheet, r_col_headings,
+                              f"Warning: Trello card not created for {request['Initials']} "
+                              'as either address, call taker, or due date info missing')
                 continue
 
             # Add trello card for this request
