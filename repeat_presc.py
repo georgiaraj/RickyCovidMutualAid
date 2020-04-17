@@ -6,6 +6,7 @@ import dateutil.parser as date_parser
 repeat_opts = {
     'Daily': 1,
     'Weekly': 7,
+    '10 day': 10,
     'Fortnightly': 14,
     'Monthly': 28,
     '3 Monthly': 76

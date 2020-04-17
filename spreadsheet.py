@@ -113,9 +113,9 @@ def get_df_from_spreadsheet(sheet, headings):
     return df.copy(), col_headings
 
 
-def request_error(sheet, headings, error_message):
-    print(error_message)
-    sheet.update_cell(idx+2, headings['Trello Error'], error_message)
+def request_outcome(sheet, headings, message):
+    print(message)
+    sheet.update_cell(idx+2, headings['Trello Outcome'], message)
 
 
 if __name__ == "__main__":
@@ -132,6 +132,7 @@ if __name__ == "__main__":
                            'b9c9b53acc2f7de0972a217366742f905ee7bb7670662e1aa6897df4fd8cfc23')
         trello_lists_general = trello.boards.get_list('KKkfsmg9')
         trello_lists_presc = trello.boards.get_list('YD9AW0Hb')
+        trello_lists_calls = trello.boards.get_list('zvdFLBVj')
 
         # Find list id
         lists = {}
@@ -144,6 +145,10 @@ if __name__ == "__main__":
         for l in trello_lists_presc:
             if l['name'] == 'Awaiting Allocation':
                 lists['pharmacy'] = l['id']
+
+        for l in trello_lists_calls:
+            if l['name'] == 'Request Needing Volunteer':
+                lists['calls'] = l['id']
 
         if not lists:
             raise RuntimeError('Column not found')
@@ -187,7 +192,7 @@ if __name__ == "__main__":
     vol_df = vol_df.join(positions[['longitude', 'latitude']], on='Postcode', how='left')
 
     if args.plot_vol_locations:
-        if len(bad) > 0:
+        if len(bads) > 0:
             print(f'Warning: bad postcodes entered, {bads}, not printed on volunteer distribution')
         plot_locations(positions.longitude, positions.latitude, jitter=30,
                        save_file='volunteer-distribution.pdf', zoom=15)
@@ -211,7 +216,7 @@ if __name__ == "__main__":
             locations, bad = postcodes_data([request['Postcode']])
             request_loc = (locations.iloc[0].longitude, locations.iloc[0].latitude)
         except:
-            request_error(requests_sheet, r_col_headings,
+            request_outcome(requests_sheet, r_col_headings,
                           f"Warning: Request {request['Initials']} missing or incorrect postcode, skipping")
             continue
 
@@ -237,7 +242,7 @@ if __name__ == "__main__":
             description += "if appropriate, they can be set up with one of the other volunteers "
             description += "for a regular chat.\n"
 
-        if request['Request'] not in presc_board_requests:
+        elif request['Request'] not in presc_board_requests: # TODO change to if for putting vols back in phone calls
             vols = get_nearest_volunteers(vol_df, request_loc, request['Request'])
 
             description += f"\nPotential volunteers:\n\n"
@@ -263,9 +268,9 @@ if __name__ == "__main__":
         if args.create_trello:
 
             if not request['Call Taker'] or not request['Due Date'] or not request['Address']:
-                request_error(requests_sheet, r_col_headings,
-                              f"Warning: Trello card not created for {request['Initials']} "
-                              'as either address, call taker, or due date info missing')
+                request_outcome(requests_sheet, r_col_headings,
+                                f"Warning: Trello card not created for {request['Initials']} "
+                                'as either address, call taker, or due date info missing')
                 continue
 
             # Add trello card for this request
@@ -280,6 +285,8 @@ if __name__ == "__main__":
 
             if request['Referred']:
                 list_id = lists['referred']
+            elif request['Request'] == 'Phone Call':
+                list_id = lists['calls']
             elif request['Request'] in presc_board_requests:
                 if request['Request'] == 'Prescription':
                     card_title += f" - {request['Pharmacy']}"
@@ -290,4 +297,5 @@ if __name__ == "__main__":
             trello.lists.new_card(list_id, card_title,
                                   due_date.isoformat(), desc=description)
             requests_sheet.update_cell(idx+2, r_col_headings['Trello Status'], 'TRUE')
-            print(f"Trello card created for {request['Initials']}.")
+            request_outcome(requests_sheet, r_col_headings,
+                            f"Trello card created for {request['Initials']}.")
