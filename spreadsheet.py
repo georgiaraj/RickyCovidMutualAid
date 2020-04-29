@@ -47,6 +47,7 @@ requests = {
 presc_board_requests = [k for k, v in requests.items() if v == 'medications']
 
 required_fields = [
+    'Request Date',
     'Name',
     'Address',
     'Postcode',
@@ -240,7 +241,8 @@ if __name__ == "__main__":
         description += f"Contact details: {request['Contact']} \n"
         if request['Alternative Contact']:
             description += f"Alternative contact: {request['Alternative Contact']}\n"
-        description += f"Original call taken by {request['Call Taker']}\n\n"
+        description += f"Original call taken by {request['Call Taker']} on "
+        description += f"{request['Request Date']}\n\n"
 
         description += f"Request required by {request['Due Date']}\n\n"
 
