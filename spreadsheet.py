@@ -14,6 +14,7 @@ from postcodes import *
 r_headings = {
     'Initials (Trello)': 'Initials',
     'Postcode (please make sure you enter this, even if approx!)': 'Postcode',
+    'Phone Number/ Email': 'Contact',
     'Pharmacy (if applicable)': 'Pharmacy',
     'Referred to another group': 'Referred',
     'Prescription Needs Payment': 'Needs Payment',
@@ -44,6 +45,17 @@ requests = {
 }
 
 presc_board_requests = [k for k, v in requests.items() if v == 'medications']
+
+required_fields = [
+    'Name',
+    'Address',
+    'Postcode',
+    'Contact',
+    'Request',
+    'Due Date',
+    'Regularity',
+    'Call Taker'
+]
 
 num_vols = 10
 num_phone_spec_vols = 2
@@ -225,7 +237,7 @@ if __name__ == "__main__":
             p_loc = 'NOT yet at pharmacy' if request['Not At Pharmacy'] == 'TRUE' else 'at pharmacy'
             description += f'This prescription {needs} and is {p_loc}.\n'
         description += f"Address: {request['Address']} {request['Postcode']}\n"
-        description += f"Contact details: {request['Phone Number/email']} \n"
+        description += f"Contact details: {request['Contact']} \n"
         if request['Alternative Contact']:
             description += f"Alternative contact: {request['Alternative Contact']}\n"
         description += f"Original call taken by {request['Call Taker']}\n\n"
@@ -268,10 +280,10 @@ if __name__ == "__main__":
 
         if args.create_trello:
 
-            if not request['Call Taker'] or not request['Due Date'] or not request['Address']:
+            if any(not request[x] for x in required_fields):
                 request_outcome(requests_sheet, r_col_headings,
                                 f"Warning: Trello card not created for {request['Initials']} "
-                                'as either address, call taker, or due date info missing')
+                                f"as {', '.join(x for x in required_fields if not request[x])} missing")
                 continue
 
             # Add trello card for this request
