@@ -31,8 +31,10 @@ v_headings = {
 }
 
 requests = {
-    'Shopping': 'Picking up shopping',
+    'Shopping': 'shopping',
+    'NHS Shopping': 'shopping',
     'Prescription': 'medications',
+    'NHS Prescription': 'medications',
     'GP Surgery': 'medications',
     'Energy Top-up': 'Topping up electric or gas keys',
     'Post': 'Posting letters',
@@ -41,10 +43,7 @@ requests = {
     'Other': 'urgent supplies'
 }
 
-presc_board_requests = [
-    'Prescription',
-    'GP Surgery'
-]
+presc_board_requests = [k for k, v in requests.items() if v == 'medications']
 
 num_vols = 10
 num_phone_spec_vols = 2
@@ -147,7 +146,7 @@ if __name__ == "__main__":
                 lists['pharmacy'] = l['id']
 
         for l in trello_lists_calls:
-            if l['name'] == 'Request Needing Volunteer':
+            if l['name'] == 'Request Needs Screening Call':
                 lists['calls'] = l['id']
 
         if not lists:
@@ -227,6 +226,8 @@ if __name__ == "__main__":
             description += f'This prescription {needs} and is {p_loc}.\n'
         description += f"Address: {request['Address']} {request['Postcode']}\n"
         description += f"Contact details: {request['Phone Number/email']} \n"
+        if request['Alternative Contact']:
+            description += f"Alternative contact: {request['Alternative Contact']}\n"
         description += f"Original call taken by {request['Call Taker']}\n\n"
 
         description += f"Request required by {request['Due Date']}\n\n"
@@ -288,10 +289,10 @@ if __name__ == "__main__":
             elif request['Request'] == 'Phone Call':
                 list_id = lists['calls']
             elif request['Request'] in presc_board_requests:
-                if request['Request'] == 'Prescription':
-                    card_title += f" - {request['Pharmacy']}"
+                if request['Request'] == 'GP Surgery':
+                    card_title += f" - GP Surgery"
                 else:
-                    card_title += " - GP Surgery"
+                    card_title += f" - {request['Pharmacy']}"
                 list_id = lists['pharmacy']
 
             trello.lists.new_card(list_id, card_title,
