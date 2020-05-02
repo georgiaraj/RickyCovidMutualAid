@@ -221,6 +221,12 @@ if __name__ == "__main__":
                 print(f'Skipping request because request completed')
             continue
 
+        if any(not request[x] for x in required_fields):
+            request_outcome(requests_sheet, r_col_headings,
+                            f"Warning: Trello card not created for {request['Initials']} "
+                            f"as {', '.join(x for x in required_fields if not request[x])} missing")
+            continue
+
         try:
             # Get postcode and lat/long of request
             #location = geolocator.geocode(request['Postcode'])
@@ -281,12 +287,6 @@ if __name__ == "__main__":
             print(description)
 
         if args.create_trello:
-
-            if any(not request[x] for x in required_fields):
-                request_outcome(requests_sheet, r_col_headings,
-                                f"Warning: Trello card not created for {request['Initials']} "
-                                f"as {', '.join(x for x in required_fields if not request[x])} missing")
-                continue
 
             # Add trello card for this request
             if request['Due Date']:
