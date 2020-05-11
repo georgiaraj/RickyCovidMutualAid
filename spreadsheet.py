@@ -290,7 +290,7 @@ if __name__ == "__main__":
 
             # Add trello card for this request
             if request['Due Date']:
-                due_date = datetime.strptime(request['Due Date'], "%d/%m/%y").date()
+                due_date = datetime.strptime(request['Due Date'], "%d/%m/%y").replace(hour=13)
                 if request['Request'] not in presc_board_requests:
                     due_date -= timedelta(1)
 

@@ -9,6 +9,7 @@ repeat_opts = {
     '10 day': 10,
     'Fortnightly': 14,
     'Monthly': 28,
+    '2 Monthly': 60,
     '3 Monthly': 76
 }
 
