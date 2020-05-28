@@ -1,5 +1,6 @@
 import gspread
 from datetime import datetime, timedelta
+import dateutil.parser as date_parser
 import re, requests
 import geopy
 import argparse
@@ -56,6 +57,12 @@ required_fields = [
     'Due Date',
     'Regularity',
     'Call Taker'
+]
+
+pharm_ignore_columns = [
+    'No Longer on Repeat',
+    'Requestor has Withdrawn',
+    'Entry Ready for Deletion'
 ]
 
 num_vols = 20
@@ -130,6 +137,22 @@ def request_outcome(sheet, headings, message):
     sheet.update_cell(idx+2, headings['Trello Outcome'], message)
 
 
+def find_card_in_lists(details, lists):
+    def get_due_date(dd):
+        return date_parser.isoparse(dd).replace(tzinfo=None)
+    newest_card = None
+    for l in lists:
+        for card in trello.lists.get_card(l):
+            if details['Name'] in card['desc'] and details['Address'] in card['desc']:
+                if newest_card is None or \
+                   get_due_date(card['due']) > get_due_date(newest_card['due']):
+                    newest_card = card
+    return newest_card
+
+def convert_date_sheet_to_trello(due_date):
+    return datetime.strptime(due_date, "%d/%m/%y").replace(hour=13)
+
+
 if __name__ == "__main__":
 
     args = get_args()
@@ -148,6 +171,7 @@ if __name__ == "__main__":
 
         # Find list id
         lists = {}
+        pharm_lists = [] # Used for finding an existing card
         for l in trello_lists_general:
             if l['name'] == 'Request Needing Volunteer':
                 lists['main'] = l['id']
@@ -157,6 +181,8 @@ if __name__ == "__main__":
         for l in trello_lists_presc:
             if l['name'] == 'Awaiting Allocation':
                 lists['pharmacy'] = l['id']
+            if l['name'] not in pharm_ignore_columns:
+                pharm_lists.append(l['id'])
 
         for l in trello_lists_calls:
             if l['name'] == 'Request Needs Screening Call':
@@ -290,7 +316,7 @@ if __name__ == "__main__":
 
             # Add trello card for this request
             if request['Due Date']:
-                due_date = datetime.strptime(request['Due Date'], "%d/%m/%y").replace(hour=13)
+                due_date = convert_date_sheet_to_trello(request['Due Date'])
                 if request['Request'] not in presc_board_requests:
                     due_date -= timedelta(1)
 
@@ -298,19 +324,44 @@ if __name__ == "__main__":
 
             card_title = f"{request['Initials']} - {request['Postcode']}"
 
+            card_updated = False
+
             if request['Referred']:
                 list_id = lists['referred']
             elif request['Request'] == 'Phone Call':
                 list_id = lists['calls']
             elif request['Request'] in presc_board_requests:
                 if request['Request'] == 'GP Surgery':
-                    card_title += f" - GP Surgery"
+                    pharm_name = 'GP Surgery'
                 else:
-                    card_title += f" - {request['Pharmacy']}"
+                    pharm_name = request['Pharmacy']
+                card_title += f" - {pharm_name}"
                 list_id = lists['pharmacy']
 
-            trello.lists.new_card(list_id, card_title,
-                                  due_date.isoformat(), desc=description)
+                if request['Regularity'] == 'Regular':
+                    card = find_card_in_lists(request, pharm_lists)
+                    if card is not None:
+                        if args.verbose:
+                            print(f'Previous card found: {card}')
+                        comment = f"New request for {request['Name']} for prescription pickup " \
+                                  f"from {pharm_name} so moved to awaiting allocation.\n"
+                        if request['Notes']:
+                            comment += f"NOTES: {request['Notes']}\n"
+                        if request['Important Info']:
+                            comment += f"IMPORTANT INFO: {request['Important Info']}\n"
+
+                        trello.cards.new_action_comment(card['id'], comment)
+                        trello.cards.update(card['id'], due=due_date.isoformat(), dueComplete=0)
+                        trello.cards.update_idList(card['id'], list_id)
+
+                        card_updated = True
+                        request_outcome(requests_sheet, r_col_headings,
+                                        f"Trello card {card['name']} updated with details "
+                                        f"from {request['Initials']}.")
+            if not card_updated:
+                trello.lists.new_card(list_id, card_title,
+                                      due_date.isoformat(), desc=description)
+                request_outcome(requests_sheet, r_col_headings,
+                                f"Trello card created for {request['Initials']}.")
+
             requests_sheet.update_cell(idx+2, r_col_headings['Trello Status'], 'TRUE')
-            request_outcome(requests_sheet, r_col_headings,
-                            f"Trello card created for {request['Initials']}.")
