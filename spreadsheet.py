@@ -58,7 +58,7 @@ required_fields = [
     'Call Taker'
 ]
 
-num_vols = 10
+num_vols = 20
 num_phone_spec_vols = 2
 
 def get_args():
