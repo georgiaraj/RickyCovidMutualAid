@@ -338,7 +338,7 @@ if __name__ == "__main__":
                 card_title += f" - {pharm_name}"
                 list_id = lists['pharmacy']
 
-                if request['Regularity'] == 'Regular':
+                if request['Regularity'] in ['One off', 'Repeat']:
                     card = find_card_in_lists(request, pharm_lists)
                     if card is not None:
                         if args.verbose:
