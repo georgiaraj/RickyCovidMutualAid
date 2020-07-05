@@ -11,6 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 from trello import TrelloApi
 
 from postcodes import *
+from repeat_presc import repeat_opts
 
 r_headings = {
     'Initials (Trello)': 'Initials',
@@ -143,7 +144,10 @@ def find_card_in_lists(details, lists):
     newest_card = None
     for l in lists:
         for card in trello.lists.get_card(l):
-            if details['Name'] in card['desc'] and details['Address'] in card['desc']:
+            if details['Name'] in card['desc']:
+                print('Found name!')
+            if details['Name'] in card['desc'] and details['Postcode'] in card['desc']:
+                print(card['desc'], any(x in card['desc'] for x in repeat_opts))
                 if newest_card is None or \
                    get_due_date(card['due']) > get_due_date(newest_card['due']):
                     newest_card = card
@@ -284,10 +288,8 @@ if __name__ == "__main__":
             description += f"NOTES: {request['Notes']}\n"
 
         if request['Request'] == 'Phone Call':
-            description += "PHONE CALL PROCESS: Phone calls should first be passed to one of the "
-            description += "approved screeners on this list for a screening call. After that, "
-            description += "if appropriate, they can be set up with one of the other volunteers "
-            description += "for a regular chat.\n"
+            description += "PHONE CALL PROCESS: Phone call requests should be referred to "
+            description += "HertsHelp. Please get consent from the requestor before referring.\n"
 
         elif request['Request'] not in presc_board_requests: # TODO change to if for putting vols back in phone calls
             vols = get_nearest_volunteers(vol_df, request_loc, request['Request'])
@@ -328,8 +330,8 @@ if __name__ == "__main__":
 
             if request['Referred']:
                 list_id = lists['referred']
-            elif request['Request'] == 'Phone Call':
-                list_id = lists['calls']
+            #elif request['Request'] == 'Phone Call':
+            #    list_id = lists['calls']
             elif request['Request'] in presc_board_requests:
                 if request['Request'] == 'GP Surgery':
                     pharm_name = 'GP Surgery'
@@ -341,10 +343,21 @@ if __name__ == "__main__":
                 if request['Regularity'] in ['One off', 'Repeat']:
                     card = find_card_in_lists(request, pharm_lists)
                     if card is not None:
+                        old_due_date = date_parser.isoparse(card['due']).replace(tzinfo=None)
+
                         if args.verbose:
                             print(f'Previous card found: {card}')
-                        comment = f"New request for {request['Name']} for prescription pickup " \
-                                  f"from {pharm_name} so moved to awaiting allocation.\n"
+                        comment = f"New request {request['Initials']} for {request['Name']} " \
+                                  "for prescription pickup " \
+                                  f"from {pharm_name} so moved to awaiting allocation. Call taken by {request['Call Taker']}.\n"
+                        needs = 'needs payment' if request['Needs Payment'] == 'TRUE' else 'does not need payment'
+                        p_loc = 'NOT yet at pharmacy' if request['Not At Pharmacy'] == 'TRUE' else 'at pharmacy'
+                        comment += f'This prescription {needs} and is {p_loc}.\n'
+                        if any(r in card['desc'] for r in repeat_opts):
+                            comment += f'PLEASE NOTE: regular card being used for a one off. '
+                            comment += f'Previous due date was: {old_due_date}. '
+                            comment += f'Please set back to this after the one off is completed.\n\n'
+
                         if request['Notes']:
                             comment += f"NOTES: {request['Notes']}\n"
                         if request['Important Info']:
