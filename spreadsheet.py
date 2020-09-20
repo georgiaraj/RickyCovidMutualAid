@@ -1,3 +1,4 @@
+import pdb
 import gspread
 from datetime import datetime, timedelta
 import dateutil.parser as date_parser
@@ -31,6 +32,13 @@ v_headings = {
     'Anything you would like to ask or tell us?': 'Notes',
     'Out of Action For General Requests Until': 'Out of Action',
     'Qualified Counsellor/MH Specialist': 'Counsellor'
+}
+
+new_v_headings = {
+    '1. Name': 'Name',
+    '7a. Do you wish to continue to volunteer for this group? Are you still available for volunteering? (if ad-hoc please select "other" and enter ad-hoc)': 'Continue',
+    '7b. How would you be willing to help going forward?': 'Request',
+    '10. Any additional comments': 'Comments'
 }
 
 requests = {
@@ -91,7 +99,7 @@ def get_formatted_postcode(row):
         row['Postcode exists'] = False
     return row
 
-def get_nearest_volunteers(vol_df, location, request_type):
+def get_nearest_volunteers(vol_df, new_vol_df, location, request_type):
 
     if request_type == 'Phone Call':
         vols = vol_df[vol_df['Counsellor']=='TRUE']
@@ -111,9 +119,7 @@ def get_nearest_volunteers(vol_df, location, request_type):
     else:
 
         vol_df_pcs = vol_df[vol_df['Postcode exists'] &
-                            vol_df['Request'].str.contains(requests[request_type]) &
-                            (vol_df['Out of Action'].isnull() |
-                             (vol_df['Out of Action'] < datetime.now()))].copy()
+                            vol_df['Request'].str.contains(requests[request_type])].copy()
 
         vol_df_pcs['Distance from'] = distance_between(location, vol_df_pcs['longitude'],
                                                        vol_df_pcs['latitude'])
@@ -202,6 +208,7 @@ if __name__ == "__main__":
     # Find a workbook by name and open the first sheet
     # Make sure you use the right name here.
     vol_sheet = client.open_by_key("1QfBAkcEi1Sc0dm-coOcP5ewEw_c2qDzasF24pN7Yqcc").sheet1
+    new_vol_sheet = client.open_by_key("1B8CZrqXBKcms_0ivzZYYG-ME_tZ6hs-qM7bk2z5LHVQ").sheet1
 
     if args.test_mode:
         # test sheet
@@ -212,8 +219,23 @@ if __name__ == "__main__":
 
     # Extract and print all of the volunteer postcodes
     vol_df, v_col_headings = get_df_from_spreadsheet(vol_sheet, v_headings)
+    new_vol_df, new_v_col_headings = get_df_from_spreadsheet(new_vol_sheet, new_v_headings)
+
+    print(new_vol_df)
+
+    vols_withdrawn = new_vol_df[new_vol_df['Continue'].str.contains('Not available')]
+    vols_continue = new_vol_df[~new_vol_df['Continue'].str.contains('Not available')]
 
     vol_df['Out of Action'] = pd.to_datetime(vol_df['Out of Action'])
+
+    print(vol_df)
+
+    # Remove volunteers that are either out of action or have said they want to stop
+    vol_df = vol_df[(vol_df['Out of Action'].isnull() |
+                    vol_df['Out of Action'] < datetime.now()) &
+                    ~vol_df['Email address'].isin(vols_withdrawn['Email address'])]
+
+    print(vol_df)
 
     vol_df['Postcode exists'] = [False] * len(vol_df.index)
     #vol_df['Longitude'] = [(0.0,0.0)] * len(vol_df.index)
@@ -291,24 +313,23 @@ if __name__ == "__main__":
             description += "PHONE CALL PROCESS: Phone call requests should be referred to "
             description += "HertsHelp. Please get consent from the requestor before referring.\n"
 
-        vols = get_nearest_volunteers(vol_df, request_loc, request['Request'])
+        else:
+            vols = get_nearest_volunteers(vol_df, new_vol_df, request_loc, request['Request'])
 
-        description += f"\nPotential volunteers:\n\n"
+            description += f"\nPotential volunteers:\n\n"
 
-        for j, vol in vols.reset_index().iterrows():
-            string = f"- Volunteer {j+1} is {vol['Name']}. Postcode {vol['Postcode']}. "
-            description += string + f"Prefers contact by {vol['Contact Means']}. "
-            description += f"{vol['Phone number']} {vol['Email address']}.\n"
-            if vol['Availability']:
-                description += f"Availability: {vol['Availability']}. "
-            if vol['Notes']:
-                description += f"Notes: {vol['Notes']}. "
-            if vol['Current Important Info']:
-                description += f"IMPORTANT VOLUNTEER INFO: {vol['Current Important Info']}.\n"
-            if request['Request'] == 'Phone Call' and vol['Counsellor'] == 'TRUE':
-                description += f"QUALIFIED COUNSELLER - Please use for screening phone calls"
-            description += '\n\n'
-            requests_sheet.update_cell(idx+2, r_col_headings['Potential Vol 1']+j, vol['Name'])
+            for j, vol in vols.reset_index().iterrows():
+                string = f"- Volunteer {j+1} is {vol['Name']}. Postcode {vol['Postcode']}. "
+                description += string + f"Prefers contact by {vol['Contact Means']}. "
+                description += f"{vol['Phone number']} {vol['Email address']}.\n"
+                if vol['Availability']:
+                    description += f"Availability: {vol['Availability']}. "
+                if vol['Notes']:
+                    description += f"Notes: {vol['Notes']}. "
+                if vol['Current Important Info']:
+                    description += f"IMPORTANT VOLUNTEER INFO: {vol['Current Important Info']}.\n"
+                description += '\n\n'
+                requests_sheet.update_cell(idx+2, r_col_headings['Potential Vol 1']+j, vol['Name'])
 
         if args.verbose:
             print(description)
