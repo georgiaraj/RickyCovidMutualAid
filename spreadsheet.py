@@ -37,7 +37,7 @@ v_headings = {
 new_v_headings = {
     '1. Name': 'Name',
     '7a. Do you wish to continue to volunteer for this group? Are you still available for volunteering? (if ad-hoc please select "other" and enter ad-hoc)': 'Continue',
-    '7b. How would you be willing to help going forward?': 'Request',
+    '7b. How would you be willing to help going forward?': 'Updated Request',
     '10. Any additional comments': 'Comments'
 }
 
@@ -99,34 +99,22 @@ def get_formatted_postcode(row):
         row['Postcode exists'] = False
     return row
 
-def get_nearest_volunteers(vol_df, new_vol_df, location, request_type):
+def get_nearest_volunteers(vol_df, location, request_type):
 
-    if request_type == 'Phone Call':
-        vols = vol_df[vol_df['Counsellor']=='TRUE']
-        if len(vols.index) < num_phone_spec_vols:
-            replace_vols = True
-        else:
-            replace_vols = False
+    vol_df_pcs = vol_df[vol_df['Postcode exists'] &
+                        ((vol_df['Continue'] &
+                          vol_df['Updated Request'].str.contains(requests[request_type])) |
+                          vol_df['Request'].str.contains(requests[request_type]))].copy()
 
-        vols = vols.sample(n=num_phone_spec_vols, replace=replace_vols).drop_duplicates('Name')
+    vol_df_pcs['Distance from'] = distance_between(location, vol_df_pcs['longitude'],
+                                                   vol_df_pcs['latitude'])
 
+    # TODO need to sort these based on continue first
+    vol_df_pcs.sort_values('Distance from', inplace=True)
+    vol_df_pcs.sort_values('Continue', ascending=False, inplace=True)
 
-        # TODO filter out the counsellor here!
-        vol_df_pcs = vol_df[vol_df['Request'].str.contains(requests[request_type])
-                            & ~vol_df['Request'].str.contains(requests['Shopping'])
-                            & ~vol_df['Request'].str.contains(requests['Prescription'])]
-        return vols.append(vol_df_pcs.sample(n=num_vols-len(vols.index)))
-    else:
+    return vol_df_pcs.head(num_vols)
 
-        vol_df_pcs = vol_df[vol_df['Postcode exists'] &
-                            vol_df['Request'].str.contains(requests[request_type])].copy()
-
-        vol_df_pcs['Distance from'] = distance_between(location, vol_df_pcs['longitude'],
-                                                       vol_df_pcs['latitude'])
-
-        vol_df_pcs = vol_df_pcs.sort_values('Distance from')
-
-        return vol_df_pcs.head(num_vols)
 
 def get_df_from_spreadsheet(sheet, headings):
     data = sheet.get_all_values()
@@ -135,6 +123,8 @@ def get_df_from_spreadsheet(sheet, headings):
                              in data[0]], [x+1 for x in range(len(data[0]))]))
 
     df = pd.DataFrame(data[1:], columns=col_headings.keys())
+
+    df = df.dropna()
 
     return df.copy(), col_headings
 
@@ -231,6 +221,13 @@ if __name__ == "__main__":
                      (vol_df['Out of Action'] < datetime.now())) &
                     ~vol_df['Email address'].isin(vols_withdrawn['Email address'])]
 
+    pdb.set_trace()
+
+    # Make note of those who are explictly continuing
+    vol_df['Continue'] = vol_df['Email address'].isin(vols_continue['Email address'])
+    vol_df = vol_df.join(vols_continue[['Updated Request', 'Comments']], on='Email address',
+                         how='left')
+
     vol_df['Postcode exists'] = [False] * len(vol_df.index)
     #vol_df['Longitude'] = [(0.0,0.0)] * len(vol_df.index)
 
@@ -318,8 +315,11 @@ if __name__ == "__main__":
                 description += f"{vol['Phone number']} {vol['Email address']}.\n"
                 if vol['Availability']:
                     description += f"Availability: {vol['Availability']}. "
-                if vol['Notes']:
-                    description += f"Notes: {vol['Notes']}. "
+                # Show the volunteers most recent comments if any
+                if vol['Comments']:
+                    description += f"Volunteer comments: {vol['Comments']}. "
+                elif vol['Notes']:
+                    description += f"Volunteer comments: {vol['Notes']}. "
                 if vol['Current Important Info']:
                     description += f"IMPORTANT VOLUNTEER INFO: {vol['Current Important Info']}.\n"
                 description += '\n\n'
