@@ -221,21 +221,15 @@ if __name__ == "__main__":
     vol_df, v_col_headings = get_df_from_spreadsheet(vol_sheet, v_headings)
     new_vol_df, new_v_col_headings = get_df_from_spreadsheet(new_vol_sheet, new_v_headings)
 
-    print(new_vol_df)
-
     vols_withdrawn = new_vol_df[new_vol_df['Continue'].str.contains('Not available')]
     vols_continue = new_vol_df[~new_vol_df['Continue'].str.contains('Not available')]
 
     vol_df['Out of Action'] = pd.to_datetime(vol_df['Out of Action'])
 
-    print(vol_df)
-
     # Remove volunteers that are either out of action or have said they want to stop
     vol_df = vol_df[(vol_df['Out of Action'].isnull() |
-                    vol_df['Out of Action'] < datetime.now()) &
+                     (vol_df['Out of Action'] < datetime.now())) &
                     ~vol_df['Email address'].isin(vols_withdrawn['Email address'])]
-
-    print(vol_df)
 
     vol_df['Postcode exists'] = [False] * len(vol_df.index)
     #vol_df['Longitude'] = [(0.0,0.0)] * len(vol_df.index)
@@ -314,7 +308,7 @@ if __name__ == "__main__":
             description += "HertsHelp. Please get consent from the requestor before referring.\n"
 
         else:
-            vols = get_nearest_volunteers(vol_df, new_vol_df, request_loc, request['Request'])
+            vols = get_nearest_volunteers(vol_df, vols_continue, request_loc, request['Request'])
 
             description += f"\nPotential volunteers:\n\n"
 
