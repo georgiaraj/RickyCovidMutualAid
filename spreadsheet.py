@@ -291,25 +291,24 @@ if __name__ == "__main__":
             description += "PHONE CALL PROCESS: Phone call requests should be referred to "
             description += "HertsHelp. Please get consent from the requestor before referring.\n"
 
-        elif request['Request'] not in presc_board_requests: # TODO change to if for putting vols back in phone calls
-            vols = get_nearest_volunteers(vol_df, request_loc, request['Request'])
+        vols = get_nearest_volunteers(vol_df, request_loc, request['Request'])
 
-            description += f"\nPotential volunteers:\n\n"
+        description += f"\nPotential volunteers:\n\n"
 
-            for j, vol in vols.reset_index().iterrows():
-                string = f"- Volunteer {j+1} is {vol['Name']}. Postcode {vol['Postcode']}. "
-                description += string + f"Prefers contact by {vol['Contact Means']}. "
-                description += f"{vol['Phone number']} {vol['Email address']}.\n"
-                if vol['Availability']:
-                    description += f"Availability: {vol['Availability']}. "
-                if vol['Notes']:
-                    description += f"Notes: {vol['Notes']}. "
-                if vol['Current Important Info']:
-                    description += f"IMPORTANT VOLUNTEER INFO: {vol['Current Important Info']}.\n"
-                if request['Request'] == 'Phone Call' and vol['Counsellor'] == 'TRUE':
-                    description += f"QUALIFIED COUNSELLER - Please use for screening phone calls"
-                description += '\n\n'
-                requests_sheet.update_cell(idx+2, r_col_headings['Potential Vol 1']+j, vol['Name'])
+        for j, vol in vols.reset_index().iterrows():
+            string = f"- Volunteer {j+1} is {vol['Name']}. Postcode {vol['Postcode']}. "
+            description += string + f"Prefers contact by {vol['Contact Means']}. "
+            description += f"{vol['Phone number']} {vol['Email address']}.\n"
+            if vol['Availability']:
+                description += f"Availability: {vol['Availability']}. "
+            if vol['Notes']:
+                description += f"Notes: {vol['Notes']}. "
+            if vol['Current Important Info']:
+                description += f"IMPORTANT VOLUNTEER INFO: {vol['Current Important Info']}.\n"
+            if request['Request'] == 'Phone Call' and vol['Counsellor'] == 'TRUE':
+                description += f"QUALIFIED COUNSELLER - Please use for screening phone calls"
+            description += '\n\n'
+            requests_sheet.update_cell(idx+2, r_col_headings['Potential Vol 1']+j, vol['Name'])
 
         if args.verbose:
             print(description)
@@ -319,8 +318,6 @@ if __name__ == "__main__":
             # Add trello card for this request
             if request['Due Date']:
                 due_date = convert_date_sheet_to_trello(request['Due Date'])
-                if request['Request'] not in presc_board_requests:
-                    due_date -= timedelta(1)
 
             list_id = lists['main']
 
@@ -330,51 +327,16 @@ if __name__ == "__main__":
 
             if request['Referred']:
                 list_id = lists['referred']
-            #elif request['Request'] == 'Phone Call':
-            #    list_id = lists['calls']
             elif request['Request'] in presc_board_requests:
                 if request['Request'] == 'GP Surgery':
                     pharm_name = 'GP Surgery'
                 else:
                     pharm_name = request['Pharmacy']
                 card_title += f" - {pharm_name}"
-                list_id = lists['pharmacy']
 
-                if request['Regularity'] in ['One off', 'Repeat']:
-                    card = find_card_in_lists(request, pharm_lists)
-                    if card is not None:
-                        old_due_date = date_parser.isoparse(card['due']).replace(tzinfo=None)
-
-                        if args.verbose:
-                            print(f'Previous card found: {card}')
-                        comment = f"New request {request['Initials']} for {request['Name']} " \
-                                  "for prescription pickup " \
-                                  f"from {pharm_name} so moved to awaiting allocation. Call taken by {request['Call Taker']}.\n"
-                        needs = 'needs payment' if request['Needs Payment'] == 'TRUE' else 'does not need payment'
-                        p_loc = 'NOT yet at pharmacy' if request['Not At Pharmacy'] == 'TRUE' else 'at pharmacy'
-                        comment += f'This prescription {needs} and is {p_loc}.\n'
-                        if any(r in card['desc'] for r in repeat_opts):
-                            comment += f'PLEASE NOTE: regular card being used for a one off. '
-                            comment += f'Previous due date was: {old_due_date}. '
-                            comment += f'Please set back to this after the one off is completed.\n\n'
-
-                        if request['Notes']:
-                            comment += f"NOTES: {request['Notes']}\n"
-                        if request['Important Info']:
-                            comment += f"IMPORTANT INFO: {request['Important Info']}\n"
-
-                        trello.cards.new_action_comment(card['id'], comment)
-                        trello.cards.update(card['id'], due=due_date.isoformat(), dueComplete=0)
-                        trello.cards.update_idList(card['id'], list_id)
-
-                        card_updated = True
-                        request_outcome(requests_sheet, r_col_headings,
-                                        f"Trello card {card['name']} updated with details "
-                                        f"from {request['Initials']}.")
-            if not card_updated:
-                trello.lists.new_card(list_id, card_title,
-                                      due_date.isoformat(), desc=description)
-                request_outcome(requests_sheet, r_col_headings,
-                                f"Trello card created for {request['Initials']}.")
+            trello.lists.new_card(list_id, card_title,
+                                  due_date.isoformat(), desc=description)
+            request_outcome(requests_sheet, r_col_headings,
+                            f"Trello card created for {request['Initials']}.")
 
             requests_sheet.update_cell(idx+2, r_col_headings['Trello Status'], 'TRUE')
