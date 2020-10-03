@@ -110,8 +110,8 @@ def get_nearest_volunteers(vol_df, location, request_type):
                                                    vol_df_pcs['latitude'])
 
     # TODO need to sort these based on continue first
-    vol_df_pcs.sort_values('Distance from', inplace=True)
-    vol_df_pcs.sort_values('Continue', ascending=False, inplace=True)
+    vol_df_pcs.sort_values(['Distance from', 'Continue'], inplace=True, ascending=[True, False])
+    #vol_df_pcs.sort_values('Continue', ascending=False, inplace=True)
 
     return vol_df_pcs.head(num_vols)
 
@@ -221,11 +221,9 @@ if __name__ == "__main__":
                      (vol_df['Out of Action'] < datetime.now())) &
                     ~vol_df['Email address'].isin(vols_withdrawn['Email address'])]
 
-    pdb.set_trace()
-
     # Make note of those who are explictly continuing
     vol_df['Continue'] = vol_df['Email address'].isin(vols_continue['Email address'])
-    vol_df = vol_df.join(vols_continue[['Updated Request', 'Comments']], on='Email address',
+    vol_df = vol_df.join(vols_continue.set_index('Email address')[['Updated Request', 'Comments']], on='Email address',
                          how='left')
 
     vol_df['Postcode exists'] = [False] * len(vol_df.index)
@@ -305,7 +303,7 @@ if __name__ == "__main__":
             description += "HertsHelp. Please get consent from the requestor before referring.\n"
 
         else:
-            vols = get_nearest_volunteers(vol_df, vols_continue, request_loc, request['Request'])
+            vols = get_nearest_volunteers(vol_df, request_loc, request['Request'])
 
             description += f"\nPotential volunteers:\n\n"
 
