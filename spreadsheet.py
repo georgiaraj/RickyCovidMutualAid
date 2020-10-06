@@ -36,8 +36,9 @@ v_headings = {
 
 new_v_headings = {
     '1. Name': 'Name',
-    '7a. Do you wish to continue to volunteer for this group? Are you still available for volunteering? (if ad-hoc please select "other" and enter ad-hoc)': 'Continue',
+    '7a. Do you wish to continue to volunteer for this group? Are you still available for volunteering? (if ad-hoc please select "other" and enter ad-hoc)': 'Updated Availability',
     '7b. How would you be willing to help going forward?': 'Updated Request',
+    '8. Does school term time/holidays affect your availability?  (If you answered "not available" in q7a please select "not available at all" here)': 'School Holiday',
     '10. Any additional comments': 'Comments'
 }
 
@@ -49,7 +50,7 @@ requests = {
     'GP Surgery': 'medications',
     'Energy Top-up': 'Topping up electric or gas keys',
     'Post': 'Posting letters',
-    'Phone Call': 'A friendly telephone call',
+    'Phone Call': 'call',
     'Dog Walk': 'Dog walking',
     'Other': 'urgent supplies'
 }
@@ -101,19 +102,26 @@ def get_formatted_postcode(row):
 
 def get_nearest_volunteers(vol_df, location, request_type):
 
-    vol_df_pcs = vol_df[vol_df['Postcode exists'] &
-                        ((vol_df['Continue'] &
-                          vol_df['Updated Request'].str.contains(requests[request_type])) |
-                          vol_df['Request'].str.contains(requests[request_type]))].copy()
+    vol_df_pcs_cont = vol_df[vol_df['Postcode exists'] &
+                             vol_df['Continue'] &
+                             (vol_df['Updated Request'].str.contains(requests[request_type])
+                              | vol_df['Updated Request'].str.contains(request_type))].copy()
+    vol_df_pcs_notcont = vol_df[vol_df['Postcode exists'] &
+                                ~vol_df['Continue'] & vol_df['Request'].str.contains(
+                                    requests[request_type])].copy()
 
-    vol_df_pcs['Distance from'] = distance_between(location, vol_df_pcs['longitude'],
-                                                   vol_df_pcs['latitude'])
+    vol_df_pcs_cont['Distance from'] = distance_between(location, vol_df_pcs_cont['longitude'],
+                                                        vol_df_pcs_cont['latitude'])
+    vol_df_pcs_notcont['Distance from'] = distance_between(location,
+                                                           vol_df_pcs_notcont['longitude'],
+                                                           vol_df_pcs_notcont['latitude'])
 
     # TODO need to sort these based on continue first
-    vol_df_pcs.sort_values(['Distance from', 'Continue'], inplace=True, ascending=[True, False])
-    #vol_df_pcs.sort_values('Continue', ascending=False, inplace=True)
+    vol_df_pcs_cont.sort_values(['Distance from'], inplace=True)
+    vol_df_pcs_notcont.sort_values(['Distance from'], inplace=True)
 
-    return vol_df_pcs.head(num_vols)
+    num_half = int(num_vols/2)
+    return vol_df_pcs_cont.head(num_half).append(vol_df_pcs_notcont.head(num_half))
 
 
 def get_df_from_spreadsheet(sheet, headings):
@@ -211,8 +219,8 @@ if __name__ == "__main__":
     vol_df, v_col_headings = get_df_from_spreadsheet(vol_sheet, v_headings)
     new_vol_df, new_v_col_headings = get_df_from_spreadsheet(new_vol_sheet, new_v_headings)
 
-    vols_withdrawn = new_vol_df[new_vol_df['Continue'].str.contains('Not available')]
-    vols_continue = new_vol_df[~new_vol_df['Continue'].str.contains('Not available')]
+    vols_withdrawn = new_vol_df[new_vol_df['Updated Availability'].str.contains('Not available')]
+    vols_continue = new_vol_df[~new_vol_df['Updated Availability'].str.contains('Not available')]
 
     vol_df['Out of Action'] = pd.to_datetime(vol_df['Out of Action'])
 
@@ -223,7 +231,11 @@ if __name__ == "__main__":
 
     # Make note of those who are explictly continuing
     vol_df['Continue'] = vol_df['Email address'].isin(vols_continue['Email address'])
-    vol_df = vol_df.join(vols_continue.set_index('Email address')[['Updated Request', 'Comments']], on='Email address',
+    vol_df = vol_df.join(vols_continue.set_index('Email address')[['Updated Request',
+                                                                   'Comments',
+                                                                   'Updated Availability',
+                                                                   'School Holiday']],
+                         on='Email address',
                          how='left')
 
     vol_df['Postcode exists'] = [False] * len(vol_df.index)
@@ -311,13 +323,17 @@ if __name__ == "__main__":
                 string = f"- Volunteer {j+1} is {vol['Name']}. Postcode {vol['Postcode']}. "
                 description += string + f"Prefers contact by {vol['Contact Means']}. "
                 description += f"{vol['Phone number']} {vol['Email address']}.\n"
-                if vol['Availability']:
-                    description += f"Availability: {vol['Availability']}. "
-                # Show the volunteers most recent comments if any
-                if vol['Comments']:
-                    description += f"Volunteer comments: {vol['Comments']}. "
-                elif vol['Notes']:
-                    description += f"Volunteer comments: {vol['Notes']}. "
+                if vol['Continue']:
+                    # Show the volunteers most recent comments if any
+                    if vol['Comments']:
+                        description += f"Volunteer comments: {vol['Comments']}.\n "
+                    description += f"Availability: {vol['Updated Availability']}.\n"
+                    description += f"Affected by school holiday: {vol['School Holiday']}.\n"
+                else:
+                    if vol['Availability']:
+                        description += f"Availability: {vol['Availability']}. "
+                    if vol['Notes']:
+                        description += f"Volunteer comments: {vol['Notes']}. "
                 if vol['Current Important Info']:
                     description += f"IMPORTANT VOLUNTEER INFO: {vol['Current Important Info']}.\n"
                 description += '\n\n'
