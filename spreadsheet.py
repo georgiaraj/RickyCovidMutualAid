@@ -102,8 +102,12 @@ def get_formatted_postcode(row):
 
 def get_nearest_volunteers(vol_df, location, request_type):
 
+    print(vol_df['Timestamp'])
+    print(datetime.now())
+
     vol_df_pcs_cont = vol_df[vol_df['Postcode exists'] &
-                             vol_df['Continue'] &
+                             (vol_df['Continue']
+                              | vol_df['Timestamp'] > datetime(2020, 7, 1)) &
                              (vol_df['Updated Request'].str.contains(requests[request_type])
                               | vol_df['Updated Request'].str.contains(request_type))].copy()
     vol_df_pcs_notcont = vol_df[vol_df['Postcode exists'] &
@@ -223,10 +227,12 @@ if __name__ == "__main__":
     vols_continue = new_vol_df[~new_vol_df['Updated Availability'].str.contains('Not available')]
 
     vol_df['Out of Action'] = pd.to_datetime(vol_df['Out of Action'])
+    vol_df['Timestamp'] = pd.to_datetime(vol_df['Timestamp'])
 
     # Remove volunteers that are either out of action or have said they want to stop
     vol_df = vol_df[(vol_df['Out of Action'].isnull() |
-                     (vol_df['Out of Action'] < datetime.now())) &
+                     vol_df['Out of Action'] < datetime.now() |
+                     ~vol_df['Timestamp'].isnull()) &
                     ~vol_df['Email address'].isin(vols_withdrawn['Email address'])]
 
     # Make note of those who are explictly continuing
