@@ -31,7 +31,8 @@ v_headings = {
     'What is your availability like? ': 'Availability',
     'Anything you would like to ask or tell us?': 'Notes',
     'Out of Action For General Requests Until': 'Out of Action',
-    'Qualified Counsellor/MH Specialist': 'Counsellor'
+    'Qualified Counsellor/MH Specialist': 'Counsellor',
+    'Confirmed Continue (Nov 2020)': 'Confirmed Continue'
 }
 
 new_v_headings = {
@@ -106,10 +107,10 @@ def get_nearest_volunteers(vol_df, location, request_type):
     print(datetime.now())
 
     vol_df_pcs_cont = vol_df[vol_df['Postcode exists'] &
-                             (vol_df['Continue']
-                              | vol_df['Timestamp'] > datetime(2020, 7, 1)) &
+                             vol_df['Continue'] &
                              (vol_df['Updated Request'].str.contains(requests[request_type])
                               | vol_df['Updated Request'].str.contains(request_type))].copy()
+
     vol_df_pcs_notcont = vol_df[vol_df['Postcode exists'] &
                                 ~vol_df['Continue'] & vol_df['Request'].str.contains(
                                     requests[request_type])].copy()
@@ -231,12 +232,18 @@ if __name__ == "__main__":
 
     # Remove volunteers that are either out of action or have said they want to stop
     vol_df = vol_df[(vol_df['Out of Action'].isnull() |
-                     vol_df['Out of Action'] < datetime.now() |
+                     (vol_df['Out of Action'] < datetime.now()) |
                      ~vol_df['Timestamp'].isnull()) &
                     ~vol_df['Email address'].isin(vols_withdrawn['Email address'])]
 
-    # Make note of those who are explictly continuing
-    vol_df['Continue'] = vol_df['Email address'].isin(vols_continue['Email address'])
+    # Make note of those who are explictly continuing (including automatically any that
+    # joined recently).
+    vol_df['Continue'] = (vol_df['Email address'].isin(vols_continue['Email address'])
+                          | (vol_df['Confirmed Continue']=="TRUE")
+                          | (vol_df['Timestamp'] > datetime(2020, 7, 1)))
+
+    pdb.set_trace()
+
     vol_df = vol_df.join(vols_continue.set_index('Email address')[['Updated Request',
                                                                    'Comments',
                                                                    'Updated Availability',
