@@ -1,4 +1,3 @@
-import pdb
 import gspread
 from datetime import datetime, timedelta
 import dateutil.parser as date_parser
@@ -103,17 +102,19 @@ def get_formatted_postcode(row):
 
 def get_nearest_volunteers(vol_df, location, request_type):
 
-    print(vol_df['Timestamp'])
-    print(datetime.now())
+    def check_request(request, col_name, dataframe):
+        return (dataframe[col_name].str.contains(requests[request])
+                | dataframe[col_name].str.contains(request))
 
     vol_df_pcs_cont = vol_df[vol_df['Postcode exists'] &
                              vol_df['Continue'] &
-                             (vol_df['Updated Request'].str.contains(requests[request_type])
-                              | vol_df['Updated Request'].str.contains(request_type))].copy()
+                             (check_request(request_type, 'Updated Request', vol_df) |
+                              (vol_df['Updated Request'].isnull() &
+                               check_request(request_type, 'Request', vol_df)))].copy()
 
     vol_df_pcs_notcont = vol_df[vol_df['Postcode exists'] &
-                                ~vol_df['Continue'] & vol_df['Request'].str.contains(
-                                    requests[request_type])].copy()
+                                ~vol_df['Continue'] &
+                                check_request(request_type, 'Request', vol_df)].copy()
 
     vol_df_pcs_cont['Distance from'] = distance_between(location, vol_df_pcs_cont['longitude'],
                                                         vol_df_pcs_cont['latitude'])
@@ -228,21 +229,20 @@ if __name__ == "__main__":
     vols_continue = new_vol_df[~new_vol_df['Updated Availability'].str.contains('Not available')]
 
     vol_df['Out of Action'] = pd.to_datetime(vol_df['Out of Action'])
-    vol_df['Timestamp'] = pd.to_datetime(vol_df['Timestamp'])
+    vol_df['Timestamp'] = pd.to_datetime(vol_df['Timestamp'], dayfirst=True)
 
     # Remove volunteers that are either out of action or have said they want to stop
     vol_df = vol_df[(vol_df['Out of Action'].isnull() |
-                     (vol_df['Out of Action'] < datetime.now()) |
+                     (vol_df['Out of Action'] < datetime.now()) &
                      ~vol_df['Timestamp'].isnull()) &
                     ~vol_df['Email address'].isin(vols_withdrawn['Email address'])]
 
     # Make note of those who are explictly continuing (including automatically any that
     # joined recently).
+
     vol_df['Continue'] = (vol_df['Email address'].isin(vols_continue['Email address'])
                           | (vol_df['Confirmed Continue']=="TRUE")
                           | (vol_df['Timestamp'] > datetime(2020, 7, 1)))
-
-    pdb.set_trace()
 
     vol_df = vol_df.join(vols_continue.set_index('Email address')[['Updated Request',
                                                                    'Comments',
@@ -336,7 +336,7 @@ if __name__ == "__main__":
                 string = f"- Volunteer {j+1} is {vol['Name']}. Postcode {vol['Postcode']}. "
                 description += string + f"Prefers contact by {vol['Contact Means']}. "
                 description += f"{vol['Phone number']} {vol['Email address']}.\n"
-                if vol['Continue']:
+                if isinstance(vol['Updated Request'], str):
                     # Show the volunteers most recent comments if any
                     if vol['Comments']:
                         description += f"Volunteer comments: {vol['Comments']}.\n "
