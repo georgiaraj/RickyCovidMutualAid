@@ -1,0 +1,1 @@
+00,15,30,45 *   * * *  georgia   . /home/georgia/Env/RCMA/bin/activate && cd /home/georgia/Code/RickyCovidMutualAid && python3 spreadsheet.py --create_trello
